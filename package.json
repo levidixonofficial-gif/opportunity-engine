@@ -19,7 +19,8 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "pg:up": "node scripts/pglite-server.mjs",
-    "verify:rls": "node scripts/verify-rls.mjs"
+    "verify:rls": "node scripts/verify-rls.mjs",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.1",

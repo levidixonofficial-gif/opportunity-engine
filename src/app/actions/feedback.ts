@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, feedbackReceivedEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({ message: z.string().trim().min(5).max(4000), path: z.string().max(300).optional() });
@@ -37,8 +37,11 @@ export async function submitFeedback(formData: FormData): Promise<{ ok: true } |
   // Best-effort notify support; honest about delivery.
   await sendEmail({
     to: env.RESEND_FROM_EMAIL ?? "support@localhost",
-    subject: "New Opportunity Engine feedback",
-    text: `From: ${user?.email ?? "anonymous"}\nPath: ${parsed.data.path ?? "-"}\n\n${parsed.data.message}`,
+    ...feedbackReceivedEmail({
+      from: user?.email ?? "anonymous",
+      path: parsed.data.path ?? null,
+      message: parsed.data.message,
+    }),
   });
 
   return { ok: true };

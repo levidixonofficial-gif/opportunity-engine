@@ -6,7 +6,7 @@ import { stripe, planForPrice, normalizeStatus } from "@/lib/stripe";
 import { captureException } from "@/lib/observability";
 import { writeAudit } from "@/lib/audit";
 import { createNotification } from "@/server/services/notifications";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, paymentFailedEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -101,11 +101,7 @@ export async function POST(req: Request) {
             body: "Update your card to keep your plan active.",
             actionUrl: "/billing",
           });
-          await sendEmail({
-            to: row.user.email,
-            subject: "Your Opportunity Engine payment failed",
-            text: "We couldn't process your latest payment. Update your card at /billing to keep Pro features.",
-          });
+          await sendEmail({ to: row.user.email, ...paymentFailedEmail() });
         }
         break;
       }

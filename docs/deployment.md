@@ -26,10 +26,12 @@ Never share a database between Preview and Production.
 ## First-time setup
 
 1. **GitHub**: push repo. Protect `main` (PR + green CI required).
-2. **Vercel**: import the repo. Framework preset = Next.js. Build command
-   `npm run build`, install `npm install`. Add a **post-install**? no — instead add
-   `prisma generate` via `postinstall` script (added in Phase 1.5) and run
-   `npm run db:deploy` in a Vercel "Build" step or a release GitHub Action.
+2. **Vercel**: import the repo. `vercel.json` (committed) pins the framework and
+   sets `buildCommand` to `npm run vercel-build` =
+   `prisma generate && prisma migrate deploy && next build`. `prisma migrate deploy`
+   only applies pending migrations — it never resets or drops. Because each Vercel
+   environment has its own `DATABASE_URL`, previews migrate their own database, not
+   production's. `deploymentEnabled` restricts auto-deploys to `main`.
 3. **Env vars** (Vercel → Settings → Environment Variables): set every key from
    `.env.example` for Preview and Production separately. `NEXT_PUBLIC_APP_URL` =
    the environment's own URL.
@@ -50,7 +52,9 @@ Never share a database between Preview and Production.
 - [ ] `npm run lint` clean
 - [ ] `npm run build` succeeds
 - [ ] `npm test` green (Phase 1.5+)
-- [ ] migrations applied to Preview, RLS verified with a two-user isolation test
+- [ ] `npm run verify:rls` green (RLS + cross-user isolation vs real Postgres)
+- [ ] migrations applied to Preview via `prisma migrate deploy`; live-DB isolation
+      spot-check (`DATABASE_PROVIDER=postgresql DATABASE_URL=<direct> npx vitest run tests/isolation.test.ts`)
 - [ ] `/api/health` returns `ok` with expected integrations
 - [ ] responsive check: 375px, 768px, 1280px
 - [ ] no secret in the client bundle (`grep` the `.next` output for known prefixes)
