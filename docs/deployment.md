@@ -31,12 +31,19 @@ Never share a database between Preview and Production.
    `prisma generate && prisma migrate deploy && next build`. `prisma migrate deploy`
    only applies pending migrations — it never resets or drops. Because each Vercel
    environment has its own `DATABASE_URL`, previews migrate their own database, not
-   production's. `deploymentEnabled` restricts auto-deploys to `main`.
+   production's. `git.deploymentEnabled.main: true` marks `main` as the production
+   branch; PR/preview deploys stay enabled (set other branches to `false` in
+   `vercel.json` or the dashboard if you want to disable them).
 3. **Env vars** (Vercel → Settings → Environment Variables): set every key from
    `.env.example` for Preview and Production separately. `NEXT_PUBLIC_APP_URL` =
    the environment's own URL.
-4. **Supabase**: create project(s), copy pooled + direct connection strings, run
-   `npm run db:deploy` and `npm run db:seed`, apply `prisma/rls/policies.sql`.
+4. **Supabase**: create project(s), copy pooled + direct connection strings. The
+   committed migrations are SQLite-flavoured — regenerate for Postgres first
+   (`docs/database.md` "Switching to Postgres": flip the provider,
+   `rm -rf prisma/migrations && prisma migrate dev --name init`, diff against
+   `prisma/postgres-preview.sql`). Then `npm run db:deploy` + `npm run db:seed`,
+   apply `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`, and
+   `npm run verify:rls` against a copy.
 5. **Clerk**: create app, set the production domain, configure Google OAuth, add the
    webhook endpoint `https://<domain>/api/webhooks/clerk` and copy the signing secret.
 6. **Stripe** (Phase 6): create products/prices, add webhook

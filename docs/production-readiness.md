@@ -208,7 +208,7 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 
 | Item | Status | Notes |
 |---|---|---|
-| Responsive at 375 / 768 / 1280 | ✅ | verified in browser |
+| Responsive at 375 / 768 / 1280 | ✅ | 375px re-verified on every authenticated route in the integration pass (fixed grid + table overflow); 768/1280 unchanged by those edits |
 | Intentional mobile nav (drawer + bottom tabs) | ✅ | not a shrunk sidebar |
 | `manifest.webmanifest` + theme-color + icon | ✅ | |
 | No horizontal overflow; wide content scrolls in-container | ✅ | |
