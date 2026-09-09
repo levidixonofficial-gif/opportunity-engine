@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
-import { sendAssistantMessage, runAndSaveGenerator, AiLimitError } from "@/server/services/ai";
+import { sendAssistantMessage, runAndSaveGenerator, AiLimitError, RateLimitError } from "@/server/services/ai";
 import { AiNotConfiguredError } from "@/lib/ai";
 import { GeneratorKind } from "@/lib/validations/enums";
 import type { GeneratorKindT } from "@/lib/ai/generators";
@@ -29,6 +29,7 @@ export async function sendMessageAction(
     return res;
   } catch (e) {
     if (e instanceof AiLimitError) return { error: e.message, limited: true };
+    if (e instanceof RateLimitError) return { error: e.message };
     if (e instanceof AiNotConfiguredError) return { error: e.message };
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
@@ -70,6 +71,7 @@ export async function runGeneratorAction(
     };
   } catch (e) {
     if (e instanceof AiLimitError) return { error: e.message, limited: true };
+    if (e instanceof RateLimitError) return { error: e.message };
     return { error: e instanceof Error ? e.message : "Generation failed." };
   }
 }

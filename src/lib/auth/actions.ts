@@ -1,9 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { rateLimit, RL } from "@/lib/ratelimit";
 import { clearDevSession, setDevSession } from "@/lib/auth";
 
 const devSignInSchema = z.object({
@@ -18,6 +20,11 @@ const devSignInSchema = z.object({
  */
 export async function devSignIn(formData: FormData) {
   if (env.AUTH_MODE !== "dev") throw new Error("Dev sign-in is disabled (AUTH_MODE is not 'dev').");
+
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const rl = await rateLimit("auth", ip, RL.auth);
+  if (!rl.success) throw new Error("Too many attempts. Wait a minute and try again.");
 
   const parsed = devSignInSchema.safeParse({
     email: formData.get("email"),

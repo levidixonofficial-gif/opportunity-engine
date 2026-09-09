@@ -5,6 +5,7 @@ import { assistantSystemPrompt } from "@/lib/ai/prompts";
 import { runGenerator, type GeneratorContext, type GeneratorKindT } from "@/lib/ai/generators";
 import { GeneratorKind } from "@/lib/validations/enums";
 import { assertWithinLimit, recordUsage } from "@/lib/usage";
+import { rateLimit, RL } from "@/lib/ratelimit";
 import { getScorerProfile } from "@/server/services/profile";
 import { recommendationsFor } from "@/server/services/opportunities";
 import { GOAL_LABELS } from "@/lib/validations/enums";
@@ -92,6 +93,9 @@ export async function sendAssistantMessage(
 ): Promise<AssistantReply> {
   const message = z.string().trim().min(1).max(4000).parse(input.message);
 
+  const rl = await rateLimit("ai", userId, RL.ai);
+  if (!rl.success) throw new RateLimitError();
+
   const limit = await assertWithinLimit(userId, "ai_message");
   if (!limit.allowed) {
     throw new AiLimitError(limit.limit ?? 0);
@@ -175,6 +179,9 @@ export async function runAndSaveGenerator(
   GeneratorKind.parse(kind);
   const cleanInput = z.string().trim().max(2000).parse(inputText);
 
+  const rl = await rateLimit("generator", userId, RL.generator);
+  if (!rl.success) throw new RateLimitError();
+
   const limit = await assertWithinLimit(userId, "generator_run");
   if (!limit.allowed) throw new AiLimitError(limit.limit ?? 0);
 
@@ -233,5 +240,12 @@ export class AiLimitError extends Error {
   constructor(public limit: number) {
     super(`You've used your AI allowance for this month (${limit}). Upgrade for more.`);
     this.name = "AiLimitError";
+  }
+}
+
+export class RateLimitError extends Error {
+  constructor() {
+    super("You're going a bit fast — wait a minute and try again.");
+    this.name = "RateLimitError";
   }
 }

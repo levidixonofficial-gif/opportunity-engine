@@ -125,6 +125,9 @@ export async function setDealStageAction(dealId: string, contactId: string, stag
 
 export async function importLeadsAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
+  const { rateLimit, RL } = await import("@/lib/ratelimit");
+  const rl = await rateLimit("import", user.id, RL.import);
+  if (!rl.success) return { error: "Too many imports in a short time — wait a minute." };
   const csv = String(formData.get("csv") ?? "");
   const sourceUrl = String(formData.get("sourceUrl") ?? "").slice(0, 300) || undefined;
   const { rows, error } = parseCsv(csv);
