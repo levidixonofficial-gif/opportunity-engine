@@ -33,9 +33,20 @@ export const SavedState = z.enum(["saved", "comparing", "selected"]);
 
 export const PlanStatus = z.enum(["active", "completed", "archived"]);
 export const TaskStatus = z.enum(["todo", "done", "skipped"]);
+export const TaskPriority = z.enum(["low", "normal", "high"]);
+export const TaskSource = z.enum(["manual", "plan", "ai", "followup"]);
 export const ProjectStatus = z.enum(["idea", "planning", "active", "paused", "completed"]);
 export const GoalStatus = z.enum(["active", "achieved", "archived"]);
-export const GoalMetric = z.enum(["revenue", "leads", "projects", "tasks", "custom"]);
+export const GoalMetric = z.enum([
+  "revenue",
+  "profit",
+  "leads",
+  "customers",
+  "projects",
+  "tasks",
+  "activity",
+  "custom",
+]);
 
 export const DealStage = z.enum([
   "lead",
@@ -45,8 +56,59 @@ export const DealStage = z.enum([
   "won",
   "lost",
 ]);
+export const DEAL_STAGE_ORDER: z.infer<typeof DealStage>[] = [
+  "lead",
+  "contacted",
+  "interested",
+  "negotiating",
+  "won",
+  "lost",
+];
+export const DEAL_STAGE_LABELS: Record<z.infer<typeof DealStage>, string> = {
+  lead: "Lead",
+  contacted: "Contacted",
+  interested: "Interested",
+  negotiating: "Negotiating",
+  won: "Won",
+  lost: "Lost",
+};
 export const InteractionType = z.enum(["note", "call", "email", "meeting", "outreach"]);
 export const TransactionType = z.enum(["revenue", "expense"]);
+export const InvoiceStatus = z.enum(["draft", "sent", "paid", "void"]);
+export const VerificationStatus = z.enum(["unverified", "verified", "invalid"]);
+
+export const GeoDependence = z.enum(["none", "local", "regional"]);
+export const SalesCycle = z.enum(["immediate", "short", "medium", "long"]);
+
+export const OutreachChannel = z.enum(["email", "call", "dm", "linkedin"]);
+export const OutreachKind = z.enum([
+  "cold_intro",
+  "follow_up",
+  "proposal",
+  "appointment",
+  "call_script",
+  "custom",
+]);
+export const OutreachStatus = z.enum([
+  "draft",
+  "sent",
+  "delivered",
+  "replied",
+  "interested",
+  "booked",
+  "won",
+  "lost",
+]);
+
+export const GeneratorKind = z.enum([
+  "offer",
+  "outreach",
+  "content_plan",
+  "business_idea",
+  "digital_product",
+  "action_plan",
+  "analysis",
+]);
 
 export const SubscriptionPlan = z.enum(["free", "pro", "premium"]);
 export type SubscriptionPlan = z.infer<typeof SubscriptionPlan>;

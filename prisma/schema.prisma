@@ -41,28 +41,50 @@ model User {
   profile             Profile?
   subscription        Subscription?
   notificationPref    NotificationPreference?
+  attribution         Attribution?
   savedOpportunities  SavedOpportunity[]
   plans               Plan[]
   tasks               Task[]
   projects            Project[]
   goals               Goal[]
+  companies           Company[]
   contacts            Contact[]
   deals               Deal[]
   interactions        Interaction[]
+  outreachMessages    OutreachMessage[]
+  leadImportBatches   LeadImportBatch[]
   transactions        Transaction[]
+  invoices            Invoice[]
   aiConversations     AiConversation[]
+  generatorOutputs    GeneratorOutput[]
   usageCounters       UsageCounter[]
   notifications       Notification[]
+  feedback            Feedback[]
   featureFlagOverride FeatureFlagOverride[]
   auditLogs           AuditLog[]
 
   @@index([role])
 }
 
+// First-touch marketing attribution captured at signup (see docs/analytics.md).
+model Attribution {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  source      String? // utm_source
+  medium      String? // utm_medium
+  campaign    String? // utm_campaign
+  term        String? // utm_term
+  content     String? // utm_content
+  referrer    String?
+  landingPath String?
+  firstSeenAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model Profile {
-  id        String @id @default(cuid())
-  userId    String @unique
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Onboarding answers (see src/lib/onboarding/questions.ts for allowed values)
   primaryGoal     String? // "first_100" | "side_income" | "build_business" | "replace_income" | "learn_skill" | "explore"
@@ -84,20 +106,20 @@ model Profile {
 // ---------------------------------------------------------------------------
 
 model Skill {
-  id            String            @id @default(cuid())
-  slug          String            @unique
+  id            String             @id @default(cuid())
+  slug          String             @unique
   label         String
   category      String? // grouping for the onboarding UI
-  createdAt     DateTime          @default(now())
+  createdAt     DateTime           @default(now())
   profiles      ProfileSkill[]
   opportunities OpportunitySkill[]
 }
 
 model Interest {
-  id            String            @id @default(cuid())
-  slug          String            @unique
+  id            String                @id @default(cuid())
+  slug          String                @unique
   label         String
-  createdAt     DateTime          @default(now())
+  createdAt     DateTime              @default(now())
   profiles      ProfileInterest[]
   opportunities OpportunityInterest[]
 }
@@ -137,20 +159,20 @@ model OpportunityCategory {
 }
 
 model Opportunity {
-  id          String  @id @default(cuid())
-  slug        String  @unique
-  name        String
-  categoryId  String
-  category    OpportunityCategory @relation(fields: [categoryId], references: [id])
+  id         String              @id @default(cuid())
+  slug       String              @unique
+  name       String
+  categoryId String
+  category   OpportunityCategory @relation(fields: [categoryId], references: [id])
 
-  summary     String  // one-line
-  description String  // long form
+  summary     String // one-line
+  description String // long form
 
   // Deterministic profile-matching inputs (1-5 scales unless noted)
-  difficulty       Int    // 1 easy .. 5 hard
-  learningCurve    Int    // 1 shallow .. 5 steep
-  competitionLevel Int    // 1 low .. 5 saturated
-  scalability      Int    // 1 linear .. 5 highly scalable
+  difficulty       Int // 1 easy .. 5 hard
+  learningCurve    Int // 1 shallow .. 5 steep
+  competitionLevel Int // 1 low .. 5 saturated
+  scalability      Int // 1 linear .. 5 highly scalable
   startupCostBand  String // "lt_50" | "50_250" | "250_1000" | "1000_plus"
   timeCommitment   String // "30_min" | "1_hr" | "2_3_hr" | "4_plus_hr"
   demandScore      Int    @default(3) // 1 weak .. 5 strong current demand (admin-maintained)
@@ -159,11 +181,20 @@ model Opportunity {
   isServiceBased   Boolean @default(true) // false => product-based
   beginnerFriendly Boolean @default(false)
 
+  // Phase 2 depth fields (all descriptive; none imply guaranteed income)
+  ongoingCostBand        String @default("lt_50") // recurring monthly cost band, same scale as startupCostBand
+  geoDependence          String @default("none") // "none" | "local" | "regional"
+  repeatRevenuePotential Int    @default(3) // 1 one-off .. 5 strong recurring
+  salesCycle             String @default("short") // "immediate" | "short" | "medium" | "long"
+  targetCustomer         String @default("") // who pays
+  prerequisites          String @default("") // what you need before starting
+  failureModes           String @default("") // common reasons this does not work out
+
   // Non-guaranteed, descriptive economics (strings, never a promised number)
-  revenueModel      String  // "Typical business model" prose
-  monetizationNotes String  // "Possible monetization" prose
-  riskNotes         String  // "Risk considerations" prose
-  profitFactors     String  // "Factors that influence profitability" prose
+  revenueModel      String // "Typical business model" prose
+  monetizationNotes String // "Possible monetization" prose
+  riskNotes         String // "Risk considerations" prose
+  profitFactors     String // "Factors that influence profitability" prose
 
   status      String  @default("published") // "draft" | "published" | "archived"
   featured    Boolean @default(false)
@@ -189,7 +220,7 @@ model Opportunity {
 model OpportunitySkill {
   opportunityId String
   skillId       String
-  weight        String @default("required") // "required" | "helpful"
+  weight        String      @default("required") // "required" | "helpful"
   opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   skill         Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
@@ -208,7 +239,7 @@ model OpportunityInterest {
 }
 
 model OpportunityTool {
-  id            String  @id @default(cuid())
+  id            String      @id @default(cuid())
   opportunityId String
   name          String
   url           String?
@@ -219,7 +250,7 @@ model OpportunityTool {
 }
 
 model OpportunityStep {
-  id            String @id @default(cuid())
+  id            String      @id @default(cuid())
   opportunityId String
   sortOrder     Int
   title         String
@@ -231,7 +262,7 @@ model OpportunityStep {
 }
 
 model OpportunityExample {
-  id            String @id @default(cuid())
+  id            String      @id @default(cuid())
   opportunityId String
   title         String
   detail        String
@@ -241,10 +272,10 @@ model OpportunityExample {
 }
 
 model SavedOpportunity {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
   opportunityId String
-  state         String @default("saved") // "saved" | "comparing" | "selected"
+  state         String   @default("saved") // "saved" | "comparing" | "selected"
   fitScore      Int? // cached deterministic score at save time (0-100)
   fitReasons    String? // JSON array of reason strings shown in the UI
   createdAt     DateTime @default(now())
@@ -261,13 +292,13 @@ model SavedOpportunity {
 // ---------------------------------------------------------------------------
 
 model Plan {
-  id            String  @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
   opportunityId String?
   title         String
   summary       String?
-  status        String  @default("active") // "active" | "completed" | "archived"
-  source        String  @default("template") // "template" | "ai" | "custom"
+  status        String   @default("active") // "active" | "completed" | "archived"
+  source        String   @default("template") // "template" | "ai" | "custom"
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -279,62 +310,70 @@ model Plan {
 }
 
 model Task {
-  id        String  @id @default(cuid())
-  userId    String
-  planId    String?
-  projectId String?
-  title     String
-  detail    String?
-  status    String  @default("todo") // "todo" | "done" | "skipped"
-  sortOrder Int     @default(0)
-  dueDate   DateTime?
+  id          String    @id @default(cuid())
+  userId      String
+  planId      String?
+  projectId   String?
+  contactId   String? // set when this task is a CRM follow-up
+  title       String
+  detail      String?
+  status      String    @default("todo") // "todo" | "done" | "skipped"
+  priority    String    @default("normal") // "low" | "normal" | "high"
+  source      String    @default("manual") // "manual" | "plan" | "ai" | "followup"
+  sortOrder   Int       @default(0)
+  dueDate     DateTime?
   completedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan    Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
+  @@index([userId, dueDate])
   @@index([planId])
   @@index([projectId])
+  @@index([contactId])
 }
 
 model Project {
-  id            String  @id @default(cuid())
-  userId        String
-  opportunityId String?
-  name          String
-  description   String?
-  status        String  @default("idea") // "idea" | "planning" | "active" | "paused" | "completed"
-  goalNote      String?
+  id                 String    @id @default(cuid())
+  userId             String
+  opportunityId      String?
+  name               String
+  description        String?
+  status             String    @default("idea") // "idea" | "planning" | "active" | "paused" | "completed"
+  goalNote           String?
   revenueTargetCents Int?
-  startDate     DateTime?
-  deadline      DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  startDate          DateTime?
+  deadline           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   tasks        Task[]
   transactions Transaction[]
   deals        Deal[]
+  milestones   Milestone[]
+  invoices     Invoice[]
 
   @@index([userId, status])
 }
 
 model Goal {
-  id        String  @id @default(cuid())
-  userId    String
-  title     String
-  metric    String  @default("revenue") // "revenue" | "leads" | "projects" | "tasks" | "custom"
-  targetValue Int
-  currentValue Int   @default(0)
-  targetDate DateTime?
-  status    String  @default("active") // "active" | "achieved" | "archived"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  userId       String
+  title        String
+  metric       String    @default("revenue") // "revenue" | "profit" | "leads" | "customers" | "projects" | "tasks" | "activity" | "custom"
+  targetValue  Int
+  currentValue Int       @default(0)
+  targetDate   DateTime?
+  status       String    @default("active") // "active" | "achieved" | "archived"
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   milestones Milestone[]
@@ -342,73 +381,115 @@ model Goal {
   @@index([userId, status])
 }
 
+// A milestone belongs to a Goal or a Project (exactly one in practice).
 model Milestone {
-  id        String  @id @default(cuid())
-  goalId    String
+  id        String    @id @default(cuid())
+  goalId    String?
+  projectId String?
   title     String
+  detail    String?
+  dueDate   DateTime?
   reachedAt DateTime?
-  sortOrder Int     @default(0)
-  goal      Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  sortOrder Int       @default(0)
+  goal      Goal?     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([goalId])
+  @@index([projectId])
 }
 
 // ---------------------------------------------------------------------------
 // Lightweight CRM
 // ---------------------------------------------------------------------------
 
-model Contact {
-  id        String  @id @default(cuid())
+model Company {
+  id        String   @id @default(cuid())
   userId    String
   name      String
-  company   String?
-  email     String?
-  phone     String?
   website   String?
-  source    String? // "referral" | "outreach" | "inbound" | "other" (free text allowed)
+  industry  String?
   notes     String?
-  isCustomer Boolean @default(false)
-  lastContactedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deals        Deal[]
-  interactions Interaction[]
-  transactions Transaction[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts Contact[]
 
   @@index([userId])
 }
 
-model Deal {
-  id        String  @id @default(cuid())
-  userId    String
-  contactId String
-  projectId String?
-  title     String
-  stage     String  @default("lead") // "lead" | "contacted" | "interested" | "negotiating" | "won" | "lost"
-  valueCents Int    @default(0)
-  nextFollowUp DateTime?
-  closedAt  DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Contact {
+  id                 String    @id @default(cuid())
+  userId             String
+  companyId          String?
+  name               String
+  company            String? // free-text company name when not linked to a Company row
+  email              String?
+  phone              String?
+  website            String?
+  title              String? // job title
+  source             String? // "referral" | "outreach" | "inbound" | "import" | "other"
+  sourceDetail       String? // e.g. which public directory / list
+  verificationStatus String    @default("unverified") // "unverified" | "verified" | "invalid"
+  tags               String? // comma-separated
+  notes              String?
+  stage              String    @default("lead") // pipeline: lead|contacted|interested|negotiating|won|lost
+  isCustomer         Boolean   @default(false)
+  importBatchId      String?
+  lastContactedAt    DateTime?
+  nextFollowUpAt     DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyRef   Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  importBatch  LeadImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  deals        Deal[]
+  interactions Interaction[]
+  outreach     OutreachMessage[]
+  tasks        Task[]
+  transactions Transaction[]
+  invoices     Invoice[]
+
+  @@index([userId, stage])
+  @@index([userId, nextFollowUpAt])
+  @@index([companyId])
+}
+
+model Deal {
+  id                String    @id @default(cuid())
+  userId            String
+  contactId         String
+  projectId         String?
+  title             String
+  stage             String    @default("lead") // "lead" | "contacted" | "interested" | "negotiating" | "won" | "lost"
+  valueCents        Int       @default(0)
+  currency          String    @default("USD")
+  probability       Int? // 0-100, user estimate
+  source            String?
+  expectedCloseDate DateTime?
+  nextFollowUp      DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact  Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  project  Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  outreach OutreachMessage[]
 
   @@index([userId, stage])
   @@index([contactId])
 }
 
 model Interaction {
-  id        String  @id @default(cuid())
-  userId    String
-  contactId String
-  type      String  @default("note") // "note" | "call" | "email" | "meeting" | "outreach"
-  body      String
+  id         String   @id @default(cuid())
+  userId     String
+  contactId  String
+  type       String   @default("note") // "note" | "call" | "email" | "meeting" | "outreach"
+  body       String
   occurredAt DateTime @default(now())
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -417,31 +498,105 @@ model Interaction {
   @@index([userId])
 }
 
+// A batch of leads brought in from one source (public list, CSV, future API).
+model LeadImportBatch {
+  id        String   @id @default(cuid())
+  userId    String
+  source    String // "csv" | "manual_list" | "public_directory" | "api:<name>"
+  sourceUrl String?
+  note      String?
+  rowCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts Contact[]
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Outreach workspace  (drafts only — status advances past "draft" ONLY when a
+// real sending integration performs the action; see docs/architecture.md)
+// ---------------------------------------------------------------------------
+
+model OutreachMessage {
+  id        String    @id @default(cuid())
+  userId    String
+  contactId String?
+  dealId    String?
+  channel   String    @default("email") // "email" | "call" | "dm" | "linkedin"
+  kind      String    @default("cold_intro") // "cold_intro" | "follow_up" | "proposal" | "appointment" | "call_script" | "custom"
+  subject   String?
+  body      String
+  status    String    @default("draft") // draft|sent|delivered|replied|interested|booked|won|lost
+  sentAt    DateTime?
+  repliedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([contactId])
+}
+
 // ---------------------------------------------------------------------------
 // Money tracking  (amounts stored as integer minor units; USD assumed for MVP)
 // ---------------------------------------------------------------------------
 
 model Transaction {
-  id        String  @id @default(cuid())
-  userId    String
-  type      String  // "revenue" | "expense"
-  amountCents Int
-  currency  String  @default("USD")
-  category  String?
-  note      String?
-  occurredOn DateTime
-  projectId String?
-  contactId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  userId             String
+  type               String // "revenue" | "expense"
+  amountCents        Int
+  currency           String   @default("USD")
+  category           String?
+  note               String?
+  occurredOn         DateTime
+  isEstimated        Boolean  @default(false) // projected vs. actual
+  isRecurring        Boolean  @default(false)
+  recurrenceInterval String? // "monthly" | "yearly" | "weekly"
+  projectId          String?
+  contactId          String?
+  invoiceId          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([userId, type])
   @@index([userId, occurredOn])
   @@index([projectId])
+}
+
+model Invoice {
+  id          String    @id @default(cuid())
+  userId      String
+  contactId   String?
+  projectId   String?
+  number      String
+  status      String    @default("draft") // "draft" | "sent" | "paid" | "void"
+  amountCents Int
+  currency    String    @default("USD")
+  issuedOn    DateTime?
+  dueOn       DateTime?
+  paidOn      DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@unique([userId, number])
+  @@index([userId, status])
 }
 
 // ---------------------------------------------------------------------------
@@ -449,10 +604,10 @@ model Transaction {
 // ---------------------------------------------------------------------------
 
 model AiConversation {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
-  title     String  @default("New conversation")
-  kind      String  @default("assistant") // "assistant" | "offer" | "outreach" | "content" | "idea" | "digital_product" | "action_plan" | "analysis"
+  title     String   @default("New conversation")
+  kind      String   @default("assistant") // "assistant" | "offer" | "outreach" | "content" | "idea" | "digital_product" | "action_plan" | "analysis"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -463,9 +618,9 @@ model AiConversation {
 }
 
 model AiMessage {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   conversationId String
-  role           String  // "user" | "assistant" | "system"
+  role           String // "user" | "assistant" | "system"
   content        String
   model          String?
   tokensIn       Int?
@@ -477,33 +632,53 @@ model AiMessage {
   @@index([conversationId])
 }
 
+// Structured output from a one-shot generator (offer, outreach, content, ...).
+// inputJson / outputJson are validated against Zod schemas before write.
+model GeneratorOutput {
+  id            String   @id @default(cuid())
+  userId        String
+  kind          String // "offer" | "outreach" | "content_plan" | "business_idea" | "digital_product" | "action_plan" | "analysis"
+  provider      String   @default("mock") // "anthropic" | "mock"
+  model         String?
+  opportunityId String?
+  projectId     String?
+  inputJson     String
+  outputJson    String
+  pinned        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+}
+
 // ---------------------------------------------------------------------------
 // Billing & entitlements
 // ---------------------------------------------------------------------------
 
 model Subscription {
-  id                   String  @id @default(cuid())
-  userId               String  @unique
-  plan                 String  @default("free") // "free" | "pro" | "premium"
-  status               String  @default("active") // mirrors Stripe: active|trialing|past_due|canceled|incomplete
-  stripeCustomerId     String? @unique
-  stripeSubscriptionId String? @unique
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  plan                 String    @default("free") // "free" | "pro" | "premium"
+  status               String    @default("active") // mirrors Stripe: active|trialing|past_due|canceled|incomplete
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
   stripePriceId        String?
   currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Rolling usage counters for metered features (AI calls, plan generations, etc.)
 model UsageCounter {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
   feature   String // "ai_message" | "plan_generation" | "generator_run" | ...
   periodKey String // e.g. "2026-09" for monthly buckets
-  count     Int    @default(0)
+  count     Int      @default(0)
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -517,14 +692,14 @@ model UsageCounter {
 // ---------------------------------------------------------------------------
 
 model Notification {
-  id        String  @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  type      String  // "opportunity" | "task_due" | "milestone" | "billing" | "digest" | "ai_limit" | "system"
+  type      String // "opportunity" | "task_due" | "milestone" | "billing" | "digest" | "ai_limit" | "system"
   title     String
   body      String?
   actionUrl String?
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -532,14 +707,14 @@ model Notification {
 }
 
 model NotificationPreference {
-  id             String  @id @default(cuid())
-  userId         String  @unique
-  productUpdates Boolean @default(true)
-  taskReminders  Boolean @default(true)
-  weeklyDigest   Boolean @default(true)
-  recommendations Boolean @default(true)
-  billingAlerts  Boolean @default(true)
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  productUpdates  Boolean  @default(true)
+  taskReminders   Boolean  @default(true)
+  weeklyDigest    Boolean  @default(true)
+  recommendations Boolean  @default(true)
+  billingAlerts   Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -549,12 +724,12 @@ model NotificationPreference {
 // ---------------------------------------------------------------------------
 
 model KnowledgeDocument {
-  id          String  @id @default(cuid())
-  slug        String  @unique
+  id          String   @id @default(cuid())
+  slug        String   @unique
   title       String
   category    String?
   body        String
-  published   Boolean @default(true)
+  published   Boolean  @default(true)
   embeddingId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -565,10 +740,10 @@ model KnowledgeDocument {
 // ---------------------------------------------------------------------------
 
 model FeatureFlag {
-  id          String  @id @default(cuid())
-  key         String  @unique
+  id          String   @id @default(cuid())
+  key         String   @unique
   description String?
-  state       String  @default("off") // "off" | "on" | "beta" | "admin_only"
+  state       String   @default("off") // "off" | "on" | "beta" | "admin_only"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -576,7 +751,7 @@ model FeatureFlag {
 }
 
 model FeatureFlagOverride {
-  id      String  @id @default(cuid())
+  id      String      @id @default(cuid())
   flagId  String
   userId  String
   enabled Boolean
@@ -588,11 +763,30 @@ model FeatureFlagOverride {
 }
 
 // ---------------------------------------------------------------------------
+// Feedback (from the floating contact button)
+// ---------------------------------------------------------------------------
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String?
+  message   String
+  path      String?
+  userAgent String?
+  status    String   @default("new") // "new" | "reviewed" | "closed"
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
 // Audit log (admin actions + security-relevant events)
 // ---------------------------------------------------------------------------
 
 model AuditLog {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   actorId    String?
   action     String
   targetType String?

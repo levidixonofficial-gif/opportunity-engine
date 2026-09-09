@@ -3,52 +3,112 @@
 /*
  * Opportunity Engine design tokens.
  * Neutral, premium, high-contrast. One accent (indigo). Subtle surfaces.
+ *
+ * Theme resolution (see ThemeScript in layout.tsx — runs before paint):
+ *   <html data-theme="light">  -> forced light
+ *   <html data-theme="dark">   -> forced dark
+ *   <html> (no attr)           -> follow prefers-color-scheme
  */
-:root {
+
+:root,
+:root[data-theme="light"] {
   --background: #fbfbfc;
   --surface: #ffffff;
-  --surface-2: #f4f4f6;
+  --surface-2: #f3f4f6;
+  --surface-3: #e9eaef;
   --foreground: #10121a;
   --muted: #5b606e;
-  --border: #e6e7ec;
+  --muted-2: #8b90a0;
+  --border: #e4e5ea;
+  --border-strong: #d3d5dd;
   --accent: #4f46e5;
+  --accent-hover: #4338ca;
   --accent-fg: #ffffff;
+  --accent-subtle: #eef0fe;
   --success: #157f4a;
+  --success-subtle: #e6f4ec;
   --warning: #b25b00;
+  --warning-subtle: #fbefe0;
   --danger: #c02636;
-  --ring: #4f46e5;
+  --danger-subtle: #fdeaec;
+  --ring: #6366f1;
+  --shadow: 0 1px 2px rgb(16 18 26 / 0.06), 0 1px 3px rgb(16 18 26 / 0.04);
+  --shadow-lg: 0 10px 30px -12px rgb(16 18 26 / 0.18);
   --radius: 0.7rem;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0a0b0f;
-    --surface: #12141b;
+    --surface: #101218;
     --surface-2: #171a22;
+    --surface-3: #1f232d;
     --foreground: #eef0f5;
     --muted: #9aa0b0;
-    --border: #262a35;
+    --muted-2: #6b7180;
+    --border: #242833;
+    --border-strong: #313644;
     --accent: #7c74ff;
+    --accent-hover: #8f88ff;
     --accent-fg: #0a0b0f;
+    --accent-subtle: #1b1a33;
     --success: #3ecb86;
+    --success-subtle: #12271d;
     --warning: #e8a23e;
+    --warning-subtle: #2a2114;
     --danger: #ff6b7a;
-    --ring: #7c74ff;
+    --danger-subtle: #2c1619;
+    --ring: #8f88ff;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 10px 30px -12px rgb(0 0 0 / 0.6);
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0a0b0f;
+  --surface: #101218;
+  --surface-2: #171a22;
+  --surface-3: #1f232d;
+  --foreground: #eef0f5;
+  --muted: #9aa0b0;
+  --muted-2: #6b7180;
+  --border: #242833;
+  --border-strong: #313644;
+  --accent: #7c74ff;
+  --accent-hover: #8f88ff;
+  --accent-fg: #0a0b0f;
+  --accent-subtle: #1b1a33;
+  --success: #3ecb86;
+  --success-subtle: #12271d;
+  --warning: #e8a23e;
+  --warning-subtle: #2a2114;
+  --danger: #ff6b7a;
+  --danger-subtle: #2c1619;
+  --ring: #8f88ff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 30px -12px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
+  --color-accent-subtle: var(--accent-subtle);
   --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
   --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
   --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -61,6 +121,10 @@
   border-color: var(--color-border);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
@@ -68,11 +132,54 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Visible keyboard focus everywhere; suppressed for mouse users. */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Skip-to-content link */
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  main {
+    padding: 0 !important;
+  }
+  a[href]::after {
+    content: "";
   }
 }

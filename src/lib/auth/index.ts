@@ -79,10 +79,23 @@ export async function getAuthUser(): Promise<User | null> {
   const identity = await resolveIdentity();
   if (!identity) return null;
 
-  const user = await db.user.upsert({
-    where: { clerkId: identity.clerkId },
-    update: { email: identity.email, ...(identity.name ? { name: identity.name } : {}) },
-    create: {
+  // Fast path: the row already exists (the common case) — one indexed read.
+  const existing = await db.user.findUnique({ where: { clerkId: identity.clerkId } });
+  if (existing) {
+    if (
+      (identity.email && identity.email !== existing.email) ||
+      (identity.name && identity.name !== existing.name)
+    ) {
+      return db.user.update({
+        where: { id: existing.id },
+        data: { email: identity.email, ...(identity.name ? { name: identity.name } : {}) },
+      });
+    }
+    return existing;
+  }
+
+  const user = await db.user.create({
+    data: {
       clerkId: identity.clerkId,
       email: identity.email,
       name: identity.name,
@@ -90,7 +103,23 @@ export async function getAuthUser(): Promise<User | null> {
       notificationPref: { create: {} },
     },
   });
+  await attachAttribution(user.id);
   return user;
+}
+
+/** Persist first-touch attribution from the oe_attr cookie on first provisioning. */
+async function attachAttribution(userId: string) {
+  try {
+    const jar = await cookies();
+    const raw = jar.get("oe_attr")?.value;
+    if (!raw) return;
+    const { parseAttributionCookie } = await import("@/lib/attribution");
+    const attr = parseAttributionCookie(decodeURIComponent(raw));
+    if (!attr) return;
+    await db.attribution.create({ data: { userId, ...attr } });
+  } catch {
+    /* attribution is best-effort */
+  }
 }
 
 export async function requireUser(): Promise<User> {
