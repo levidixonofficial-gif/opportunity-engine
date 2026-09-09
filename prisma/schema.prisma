@@ -1,0 +1,608 @@
+// Opportunity Engine — Prisma schema
+// ---------------------------------------------------------------------------
+// PORTABILITY: This schema is written to run on BOTH SQLite (local dev) and
+// PostgreSQL / Supabase (preview + production). To keep it portable we avoid:
+//   - native `enum` types      -> use String columns + Zod unions in src/lib/validations
+//   - scalar list fields (x[]) -> use explicit join tables
+//   - db-native column types   -> none referenced
+// Switch providers with the DATABASE_PROVIDER + DATABASE_URL env vars.
+//
+// AUTHORIZATION: Row Level Security policies for production live in
+// prisma/rls/*.sql and are applied to Supabase separately. The ENFORCED
+// authorization boundary in all environments is the server service layer
+// (src/server/services/*), which scopes every query by the authenticated
+// user id. RLS is defense-in-depth for direct Supabase client access.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: the connection URL lives in prisma.config.ts, not here.
+// Local dev = sqlite; production swaps provider to "postgresql" (see docs/database.md).
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Identity  (Clerk is the auth provider; these rows mirror Clerk users)
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique // subject from the verified Clerk session; never trusted from client
+  email     String   @unique
+  name      String?
+  imageUrl  String?
+  role      String   @default("user") // "user" | "admin" — enforced server-side only
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile             Profile?
+  subscription        Subscription?
+  notificationPref    NotificationPreference?
+  savedOpportunities  SavedOpportunity[]
+  plans               Plan[]
+  tasks               Task[]
+  projects            Project[]
+  goals               Goal[]
+  contacts            Contact[]
+  deals               Deal[]
+  interactions        Interaction[]
+  transactions        Transaction[]
+  aiConversations     AiConversation[]
+  usageCounters       UsageCounter[]
+  notifications       Notification[]
+  featureFlagOverride FeatureFlagOverride[]
+  auditLogs           AuditLog[]
+
+  @@index([role])
+}
+
+model Profile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Onboarding answers (see src/lib/onboarding/questions.ts for allowed values)
+  primaryGoal     String? // "first_100" | "side_income" | "build_business" | "replace_income" | "learn_skill" | "explore"
+  budgetBand      String? // "lt_50" | "50_250" | "250_1000" | "1000_plus"
+  timeBand        String? // "30_min" | "1_hr" | "2_3_hr" | "4_plus_hr"
+  experienceLevel String? // "none" | "some" | "experienced"
+  onboardingRaw   String? // JSON snapshot of the raw submission, for auditing/replay
+  onboardedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills    ProfileSkill[]
+  interests ProfileInterest[]
+}
+
+// ---------------------------------------------------------------------------
+// Catalogs: skills & interests (admin-editable, referenced by profiles + opportunities)
+// ---------------------------------------------------------------------------
+
+model Skill {
+  id            String            @id @default(cuid())
+  slug          String            @unique
+  label         String
+  category      String? // grouping for the onboarding UI
+  createdAt     DateTime          @default(now())
+  profiles      ProfileSkill[]
+  opportunities OpportunitySkill[]
+}
+
+model Interest {
+  id            String            @id @default(cuid())
+  slug          String            @unique
+  label         String
+  createdAt     DateTime          @default(now())
+  profiles      ProfileInterest[]
+  opportunities OpportunityInterest[]
+}
+
+model ProfileSkill {
+  profileId String
+  skillId   String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, skillId])
+  @@index([skillId])
+}
+
+model ProfileInterest {
+  profileId  String
+  interestId String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, interestId])
+  @@index([interestId])
+}
+
+// ---------------------------------------------------------------------------
+// Opportunity Engine
+// ---------------------------------------------------------------------------
+
+model OpportunityCategory {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  label         String
+  description   String?
+  icon          String? // lucide icon name
+  sortOrder     Int           @default(0)
+  opportunities Opportunity[]
+}
+
+model Opportunity {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  categoryId  String
+  category    OpportunityCategory @relation(fields: [categoryId], references: [id])
+
+  summary     String  // one-line
+  description String  // long form
+
+  // Deterministic profile-matching inputs (1-5 scales unless noted)
+  difficulty       Int    // 1 easy .. 5 hard
+  learningCurve    Int    // 1 shallow .. 5 steep
+  competitionLevel Int    // 1 low .. 5 saturated
+  scalability      Int    // 1 linear .. 5 highly scalable
+  startupCostBand  String // "lt_50" | "50_250" | "250_1000" | "1000_plus"
+  timeCommitment   String // "30_min" | "1_hr" | "2_3_hr" | "4_plus_hr"
+  demandScore      Int    @default(3) // 1 weak .. 5 strong current demand (admin-maintained)
+
+  isOnline         Boolean @default(true)
+  isServiceBased   Boolean @default(true) // false => product-based
+  beginnerFriendly Boolean @default(false)
+
+  // Non-guaranteed, descriptive economics (strings, never a promised number)
+  revenueModel      String  // "Typical business model" prose
+  monetizationNotes String  // "Possible monetization" prose
+  riskNotes         String  // "Risk considerations" prose
+  profitFactors     String  // "Factors that influence profitability" prose
+
+  status      String  @default("published") // "draft" | "published" | "archived"
+  featured    Boolean @default(false)
+  embeddingId String? // id of the vector in the semantic index (null until indexed)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills    OpportunitySkill[]
+  interests OpportunityInterest[]
+  tools     OpportunityTool[]
+  steps     OpportunityStep[]
+  examples  OpportunityExample[]
+  saved     SavedOpportunity[]
+  plans     Plan[]
+  projects  Project[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([featured])
+}
+
+model OpportunitySkill {
+  opportunityId String
+  skillId       String
+  weight        String @default("required") // "required" | "helpful"
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  skill         Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, skillId])
+  @@index([skillId])
+}
+
+model OpportunityInterest {
+  opportunityId String
+  interestId    String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  interest      Interest    @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, interestId])
+  @@index([interestId])
+}
+
+model OpportunityTool {
+  id            String  @id @default(cuid())
+  opportunityId String
+  name          String
+  url           String?
+  note          String?
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+model OpportunityStep {
+  id            String @id @default(cuid())
+  opportunityId String
+  sortOrder     Int
+  title         String
+  detail        String
+  phaseLabel    String? // e.g. "Week 1"
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+model OpportunityExample {
+  id            String @id @default(cuid())
+  opportunityId String
+  title         String
+  detail        String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+model SavedOpportunity {
+  id            String @id @default(cuid())
+  userId        String
+  opportunityId String
+  state         String @default("saved") // "saved" | "comparing" | "selected"
+  fitScore      Int? // cached deterministic score at save time (0-100)
+  fitReasons    String? // JSON array of reason strings shown in the UI
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Execution: plans, tasks, projects, goals
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id            String  @id @default(cuid())
+  userId        String
+  opportunityId String?
+  title         String
+  summary       String?
+  status        String  @default("active") // "active" | "completed" | "archived"
+  source        String  @default("template") // "template" | "ai" | "custom"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+
+  @@index([userId])
+}
+
+model Task {
+  id        String  @id @default(cuid())
+  userId    String
+  planId    String?
+  projectId String?
+  title     String
+  detail    String?
+  status    String  @default("todo") // "todo" | "done" | "skipped"
+  sortOrder Int     @default(0)
+  dueDate   DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan    Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([planId])
+  @@index([projectId])
+}
+
+model Project {
+  id            String  @id @default(cuid())
+  userId        String
+  opportunityId String?
+  name          String
+  description   String?
+  status        String  @default("idea") // "idea" | "planning" | "active" | "paused" | "completed"
+  goalNote      String?
+  revenueTargetCents Int?
+  startDate     DateTime?
+  deadline      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  tasks        Task[]
+  transactions Transaction[]
+  deals        Deal[]
+
+  @@index([userId, status])
+}
+
+model Goal {
+  id        String  @id @default(cuid())
+  userId    String
+  title     String
+  metric    String  @default("revenue") // "revenue" | "leads" | "projects" | "tasks" | "custom"
+  targetValue Int
+  currentValue Int   @default(0)
+  targetDate DateTime?
+  status    String  @default("active") // "active" | "achieved" | "archived"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+
+  @@index([userId, status])
+}
+
+model Milestone {
+  id        String  @id @default(cuid())
+  goalId    String
+  title     String
+  reachedAt DateTime?
+  sortOrder Int     @default(0)
+  goal      Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight CRM
+// ---------------------------------------------------------------------------
+
+model Contact {
+  id        String  @id @default(cuid())
+  userId    String
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  website   String?
+  source    String? // "referral" | "outreach" | "inbound" | "other" (free text allowed)
+  notes     String?
+  isCustomer Boolean @default(false)
+  lastContactedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deals        Deal[]
+  interactions Interaction[]
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Deal {
+  id        String  @id @default(cuid())
+  userId    String
+  contactId String
+  projectId String?
+  title     String
+  stage     String  @default("lead") // "lead" | "contacted" | "interested" | "negotiating" | "won" | "lost"
+  valueCents Int    @default(0)
+  nextFollowUp DateTime?
+  closedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, stage])
+  @@index([contactId])
+}
+
+model Interaction {
+  id        String  @id @default(cuid())
+  userId    String
+  contactId String
+  type      String  @default("note") // "note" | "call" | "email" | "meeting" | "outreach"
+  body      String
+  occurredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Money tracking  (amounts stored as integer minor units; USD assumed for MVP)
+// ---------------------------------------------------------------------------
+
+model Transaction {
+  id        String  @id @default(cuid())
+  userId    String
+  type      String  // "revenue" | "expense"
+  amountCents Int
+  currency  String  @default("USD")
+  category  String?
+  note      String?
+  occurredOn DateTime
+  projectId String?
+  contactId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([userId, type])
+  @@index([userId, occurredOn])
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// AI assistant & generators
+// ---------------------------------------------------------------------------
+
+model AiConversation {
+  id        String  @id @default(cuid())
+  userId    String
+  title     String  @default("New conversation")
+  kind      String  @default("assistant") // "assistant" | "offer" | "outreach" | "content" | "idea" | "digital_product" | "action_plan" | "analysis"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([userId, kind])
+}
+
+model AiMessage {
+  id             String  @id @default(cuid())
+  conversationId String
+  role           String  // "user" | "assistant" | "system"
+  content        String
+  model          String?
+  tokensIn       Int?
+  tokensOut      Int?
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Billing & entitlements
+// ---------------------------------------------------------------------------
+
+model Subscription {
+  id                   String  @id @default(cuid())
+  userId               String  @unique
+  plan                 String  @default("free") // "free" | "pro" | "premium"
+  status               String  @default("active") // mirrors Stripe: active|trialing|past_due|canceled|incomplete
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+  stripePriceId        String?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Rolling usage counters for metered features (AI calls, plan generations, etc.)
+model UsageCounter {
+  id        String @id @default(cuid())
+  userId    String
+  feature   String // "ai_message" | "plan_generation" | "generator_run" | ...
+  periodKey String // e.g. "2026-09" for monthly buckets
+  count     Int    @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature, periodKey])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String  @id @default(cuid())
+  userId    String
+  type      String  // "opportunity" | "task_due" | "milestone" | "billing" | "digest" | "ai_limit" | "system"
+  title     String
+  body      String?
+  actionUrl String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model NotificationPreference {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  productUpdates Boolean @default(true)
+  taskReminders  Boolean @default(true)
+  weeklyDigest   Boolean @default(true)
+  recommendations Boolean @default(true)
+  billingAlerts  Boolean @default(true)
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge base (indexed for semantic search)
+// ---------------------------------------------------------------------------
+
+model KnowledgeDocument {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  title       String
+  category    String?
+  body        String
+  published   Boolean @default(true)
+  embeddingId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Feature flags
+// ---------------------------------------------------------------------------
+
+model FeatureFlag {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  description String?
+  state       String  @default("off") // "off" | "on" | "beta" | "admin_only"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  overrides FeatureFlagOverride[]
+}
+
+model FeatureFlagOverride {
+  id      String  @id @default(cuid())
+  flagId  String
+  userId  String
+  enabled Boolean
+  flag    FeatureFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (admin actions + security-relevant events)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String  @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  meta       String? // JSON
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+}

@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/*
+ * Opportunity Engine design tokens.
+ * Neutral, premium, high-contrast. One accent (indigo). Subtle surfaces.
+ */
+:root {
+  --background: #fbfbfc;
+  --surface: #ffffff;
+  --surface-2: #f4f4f6;
+  --foreground: #10121a;
+  --muted: #5b606e;
+  --border: #e6e7ec;
+  --accent: #4f46e5;
+  --accent-fg: #ffffff;
+  --success: #157f4a;
+  --warning: #b25b00;
+  --danger: #c02636;
+  --ring: #4f46e5;
+  --radius: 0.7rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0b0f;
+    --surface: #12141b;
+    --surface-2: #171a22;
+    --foreground: #eef0f5;
+    --muted: #9aa0b0;
+    --border: #262a35;
+    --accent: #7c74ff;
+    --accent-fg: #0a0b0f;
+    --success: #3ecb86;
+    --warning: #e8a23e;
+    --danger: #ff6b7a;
+    --ring: #7c74ff;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.2rem);
+  --radius-sm: calc(var(--radius) - 0.35rem);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
