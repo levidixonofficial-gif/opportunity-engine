@@ -117,6 +117,49 @@ export async function recommendationsFor(userId: string, limit = 4): Promise<Sco
   return all.slice(0, limit);
 }
 
+export interface SemanticSearchResult {
+  mode: "semantic" | "keyword";
+  query: string;
+  results: ScoredOpportunity[];
+}
+
+/**
+ * Natural-language opportunity search: "something I can start this weekend with
+ * almost no money and no inventory". Retrieves by relevance, then re-ranks the
+ * top matches with the deterministic Fit Score so personalization still applies.
+ */
+export async function semanticOpportunitySearch(
+  userId: string | null,
+  query: string,
+): Promise<SemanticSearchResult> {
+  const { semanticSearch } = await import("@/lib/vector");
+  const rows = await db.opportunity.findMany({ where: { status: "published" }, include: listInclude });
+
+  const corpus = rows.map((o) => ({
+    id: o.id,
+    text: [o.name, o.summary, o.description, o.targetCustomer, o.prerequisites, o.category.label].join(" "),
+    keywords: [
+      o.isOnline ? "online" : "local in-person",
+      o.isServiceBased ? "service" : "product physical",
+      o.beginnerFriendly ? "beginner easy no experience" : "",
+      o.startupCostBand === "lt_50" ? "cheap free low cost no money" : "",
+      o.timeCommitment === "30_min" || o.timeCommitment === "1_hr" ? "part time spare time weekend" : "",
+    ].filter(Boolean),
+  }));
+
+  const { mode, hits } = await semanticSearch(query, corpus, { topK: 10 });
+  const byId = new Map(rows.map((o) => [o.id, o]));
+  const profile = userId ? await getScorerProfile(userId) : null;
+
+  const results: ScoredOpportunity[] = hits
+    .map((h) => byId.get(h.id))
+    .filter((o): o is (typeof rows)[number] => !!o)
+    .map((o) => ({ opportunity: o, fit: profile ? scoreOpportunity(profile, toScorer(o)) : null }))
+    .sort((a, b) => (b.fit?.score ?? 0) - (a.fit?.score ?? 0));
+
+  return { mode, query, results };
+}
+
 /**
  * Recompute + cache fit scores on the user's saved rows (called after onboarding
  * or profile edits). Does not create saves — only refreshes existing ones.

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, EmptyState } from "@/components/ui/misc";
 import { Filters } from "./Filters";
 import { SaveButton } from "./SaveButton";
+import { NaturalSearch } from "./NaturalSearch";
 
 export const metadata = { title: "Opportunities" };
 
@@ -40,6 +41,8 @@ export default async function OpportunitiesPage({
           Ranked by fit with your profile. Scores are a guide, not a promise of income.
         </p>
       </div>
+
+      <NaturalSearch />
 
       <Filters categories={categories} />
 
