@@ -26,3 +26,15 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Fail the build on a HIGH or CRITICAL production dependency advisory.
+      - run: npm audit --omit=dev --audit-level=high

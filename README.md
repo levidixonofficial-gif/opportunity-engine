@@ -87,6 +87,8 @@ Start with [`docs/architecture.md`](docs/architecture.md). Also:
 [error-monitoring](docs/error-monitoring.md) ·
 [deployment](docs/deployment.md) ·
 [dns](docs/dns.md) ·
+[environment](docs/environment.md) ·
+[production-readiness](docs/production-readiness.md) ·
 [roadmap](docs/roadmap.md).
 
 ## Contributing

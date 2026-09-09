@@ -73,11 +73,11 @@ describe("production configuration gate", () => {
       // @ts-expect-error partial
       {
         AUTH_MODE: "clerk",
-        CLERK_SECRET_KEY: "sk_live_x",
+        CLERK_SECRET_KEY: "clerk-secret-placeholder",
         DEV_AUTH_SECRET: "a-real-random-secret",
         DATABASE_PROVIDER: "postgresql",
       },
-      { NEXT_PUBLIC_APP_URL: "https://app.example.com", NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_x" },
+      { NEXT_PUBLIC_APP_URL: "https://app.example.com", NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "clerk-pub-placeholder" },
     );
     expect(problems).toEqual([]);
   });

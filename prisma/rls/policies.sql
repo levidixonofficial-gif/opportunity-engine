@@ -46,14 +46,20 @@ begin
   end loop;
 end $$;
 
--- Milestone: owned transitively through its Goal or Project.
+-- Milestone: owned transitively through its Goal or Project (identifiers quoted —
+-- Prisma columns are case-sensitive camelCase).
 alter table "Milestone" enable row level security;
 drop policy if exists "Milestone_owner" on "Milestone";
 create policy "Milestone_owner" on "Milestone"
   using (
-    (goalId is not null and exists (select 1 from "Goal" g where g.id = "Milestone"."goalId" and g."userId" = current_app_user_id()))
+    ("Milestone"."goalId" is not null and exists (select 1 from "Goal" g where g."id" = "Milestone"."goalId" and g."userId" = current_app_user_id()))
     or
-    (projectId is not null and exists (select 1 from "Project" p where p.id = "Milestone"."projectId" and p."userId" = current_app_user_id()))
+    ("Milestone"."projectId" is not null and exists (select 1 from "Project" p where p."id" = "Milestone"."projectId" and p."userId" = current_app_user_id()))
+  )
+  with check (
+    ("Milestone"."goalId" is not null and exists (select 1 from "Goal" g where g."id" = "Milestone"."goalId" and g."userId" = current_app_user_id()))
+    or
+    ("Milestone"."projectId" is not null and exists (select 1 from "Project" p where p."id" = "Milestone"."projectId" and p."userId" = current_app_user_id()))
   );
 
 -- AiMessage: owned through its conversation.
@@ -81,6 +87,9 @@ begin
   end loop;
 end $$;
 
--- User + AuditLog: no client access at all (service role only).
+-- User + AuditLog + WebhookEvent: no client access at all (service role only).
+-- RLS is enabled with no permissive policy, so every non-owner/non-superuser
+-- SELECT/INSERT/UPDATE/DELETE is denied.
 alter table "User" enable row level security;
 alter table "AuditLog" enable row level security;
+alter table "WebhookEvent" enable row level security;

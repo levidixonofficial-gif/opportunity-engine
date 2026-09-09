@@ -1,5 +1,8 @@
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { env } from "@/lib/env";
+import { hasFeature } from "@/lib/entitlements";
+import { getUserPlan } from "@/server/services/billing";
 import { chat, aiMode, AiNotConfiguredError, type ChatMessage } from "@/lib/ai";
 import { assistantSystemPrompt } from "@/lib/ai/prompts";
 import { runGenerator, type GeneratorContext, type GeneratorKindT } from "@/lib/ai/generators";
@@ -112,6 +115,11 @@ export async function sendAssistantMessage(
   // Atomically consume 1 message from the monthly allowance (refunded on failure).
   const usage = await consumeUsage(userId, "ai_message");
 
+  // Premium ("advanced_ai") uses the default model; other plans use the fast model.
+  const requestModel = hasFeature(await getUserPlan(userId), "advanced_ai")
+    ? env.AI_MODEL_DEFAULT
+    : env.AI_MODEL_FAST;
+
   let conversation = input.conversationId
     ? await db.aiConversation.findFirst({ where: { id: input.conversationId, userId } })
     : null;
@@ -143,7 +151,7 @@ export async function sendAssistantMessage(
       { role: "user", content: message },
     ];
     try {
-      const res = await chat(assistantSystemPrompt(ctx.text), msgs, { maxTokens: 900 });
+      const res = await chat(assistantSystemPrompt(ctx.text), msgs, { maxTokens: 900, model: requestModel });
       reply = res.text;
       model = res.model;
       tokensIn = res.tokensIn;
@@ -220,9 +228,13 @@ export async function runAndSaveGenerator(
     }
   }
 
+  const requestModel = hasFeature(await getUserPlan(userId), "advanced_ai")
+    ? env.AI_MODEL_DEFAULT
+    : env.AI_MODEL_FAST;
+
   let result;
   try {
-    result = await runGenerator(kind, cleanInput, ctx.generator);
+    result = await runGenerator(kind, cleanInput, ctx.generator, { model: requestModel });
   } catch (err) {
     await usage.release(false);
     captureException(err, { where: "runAndSaveGenerator", kind });

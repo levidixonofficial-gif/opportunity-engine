@@ -2,10 +2,13 @@
 
 ## Provider
 
-Anthropic Claude via `@anthropic-ai/sdk`. Models from env:
-`AI_MODEL_DEFAULT` (`claude-sonnet-5`) and `AI_MODEL_FAST`
-(`claude-haiku-4-5-20251001`). Premium plan unlocks the default model for the
-assistant; lower plans use the fast model.
+Anthropic Claude via the Messages API (`lib/ai/chat`, plain `fetch` — no SDK
+dependency). Models from env: `AI_MODEL_DEFAULT` (`claude-sonnet-5`) and
+`AI_MODEL_FAST` (`claude-haiku-4-5-20251001`).
+
+Per-plan model selection is wired in `server/services/ai`:
+`hasFeature(plan, "advanced_ai")` (Premium only) → `AI_MODEL_DEFAULT`; every other
+plan → `AI_MODEL_FAST`. The client never chooses the model.
 
 ## Components
 
@@ -17,18 +20,23 @@ assistant; lower plans use the fast model.
 2. **Generators** (kinds `offer`, `outreach`, `content`, `idea`, `digital_product`,
    `action_plan`, `analysis`) — single-shot, structured output validated with Zod
    before display/persistence.
-3. **Action Plan Generator** — produces a task list that is written as a real `Plan` +
-   `Task` rows (`source: "ai"`), mirroring the deterministic template path.
+3. **Action Plan Generator** — returns a structured 4-week plan (weeks → tasks).
+   Writing it into real `Plan` + `Task` rows (`source: "ai"`) is **not yet wired**;
+   for now the deterministic "Generate 30-day plan" button on an opportunity is
+   the path that creates tasks.
 
 ## Cost control (spec §35)
 
-- `checkUsage(plan, "aiMessagesPerMonth" | "generatorRunsPerMonth" | ...)` gates every
-  call; `UsageCounter` rows are incremented in the same transaction as the message
-  write.
-- Hard token cap per request; context is trimmed to a budget before sending.
-- Identical generator inputs are cached (Upstash) for a short TTL.
+- `consumeUsage(userId, feature)` — increments the `UsageCounter` FIRST, then
+  checks the plan limit, and **refunds** the unit if the AI call fails or the
+  count would exceed the cap. This closes the check-then-act race that a plain
+  "read counter → call AI → write counter" would leave open. Applies to
+  `ai_message`, `generator_run`, **and `plan_generation`** (which previously had
+  no enforcement at all).
+- Sliding-window rate limits on top: 20 chat / 12 generator per minute.
+- Hard `maxTokens` cap per request.
 - Model is selected by plan, not by the client.
-- A usage widget on `/ai` and `/billing` shows remaining quota.
+- `/ai` and `/billing` show remaining quota.
 
 ## Safety (spec §30)
 

@@ -22,6 +22,11 @@ The schema runs on both engines, so it avoids:
 
 ## Switching to Postgres
 
+The committed migrations are SQLite-flavoured and are **not** applied on Postgres —
+they are regenerated. [`prisma/postgres-preview.sql`](../prisma/postgres-preview.sql)
+is a generated preview of exactly what the first Postgres migration will create
+(run `prisma migrate diff` with the provider flipped), so there are no surprises.
+
 1. Create a Supabase project.
 2. In `.env.local`:
    ```
@@ -31,9 +36,12 @@ The schema runs on both engines, so it avoids:
    ```
 3. In `prisma/schema.prisma` set `datasource db { provider = "postgresql" }`.
 4. `rm -rf prisma/migrations` then `npm run db:migrate -- --name init` to regenerate
-   migrations for Postgres (the SQLite migration SQL is not portable).
+   migrations for Postgres. Diff the result against `postgres-preview.sql`.
 5. `npm run db:seed`.
 6. Apply RLS policies: `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`.
+7. Verify: run the isolation suite against the new DB
+   (`DATABASE_URL=<postgres> npx vitest run tests/isolation.test.ts` — point
+   `tests/setup.ts`/`global-setup` at it, or set the env inline).
 
 ## Schema overview
 
