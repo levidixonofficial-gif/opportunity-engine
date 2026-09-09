@@ -11,8 +11,10 @@ export const metadata = { title: "Dashboard" };
 const QUICK_ACTIONS = [
   { label: "Find an opportunity", href: "/opportunities" },
   { label: "Review my plan", href: "/plan" },
+  { label: "Ask the AI coach", href: "/ai" },
   { label: "Log revenue", href: "/money" },
   { label: "Add a lead", href: "/leads" },
+  { label: "Set a goal", href: "/goals" },
 ];
 
 export default async function DashboardPage() {

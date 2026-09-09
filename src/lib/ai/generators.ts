@@ -250,7 +250,7 @@ function buildRuleBased(kind: GeneratorKindT, input: string, ctx: GeneratorConte
       return {
         name: `${oppName} for ${niche}`,
         targetCustomer: target,
-        problem: `${target} needs a result related to "${niche}" but lacks the time or skill to do it well themselves.`,
+        problem: `Your customer wants a result around "${niche}" but doesn't have the time or the skill to do it well in-house.`,
         solution: o?.summary ?? `A focused ${o?.isServiceBased ? "done-for-you service" : "product"} that delivers that result.`,
         deliverables: [
           "A clear scope document (what's included / not included)",

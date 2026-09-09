@@ -36,14 +36,14 @@ export function ContactButton() {
 
   return (
     <>
-      <div className="no-print fixed bottom-20 left-4 z-40 md:bottom-6">
+      <div className="no-print fixed bottom-32 right-4 z-40 md:bottom-20">
         <AnimatePresence>
           {menuOpen && (
             <motion.div
               initial={{ opacity: 0, y: 8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              className="absolute bottom-12 left-0 w-48 overflow-hidden rounded-md border bg-surface py-1 shadow-[var(--shadow-lg)]"
+              className="absolute bottom-12 right-0 w-48 overflow-hidden rounded-md border bg-surface py-1 shadow-[var(--shadow-lg)]"
             >
               <button
                 onClick={() => {

@@ -49,7 +49,7 @@ export function CookieBanner() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
-          className="no-print fixed inset-x-3 bottom-3 z-50 mx-auto max-w-lg rounded-lg border bg-surface p-4 shadow-[var(--shadow-lg)] md:inset-x-auto md:left-4"
+          className="no-print fixed inset-x-3 bottom-3 z-50 mx-auto max-w-lg rounded-lg border bg-surface p-4 shadow-[var(--shadow-lg)] md:inset-x-0 md:mx-auto"
           role="dialog"
           aria-label="Cookie notice"
         >

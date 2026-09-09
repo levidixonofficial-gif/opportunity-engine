@@ -3,8 +3,16 @@ import { PLAN_ENTITLEMENTS } from "@/lib/entitlements";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/misc";
+import { Faq } from "@/components/ui/faq";
 
 export const metadata = { title: "Pricing" };
+
+const FAQS = [
+  { q: "Can I use it for free?", a: "Yes. The free plan covers the full loop with limits: 5 saved opportunities, one plan, 15 AI messages a month. No card required." },
+  { q: "What happens when I hit a limit?", a: "The action is blocked with a clear message and a link to upgrade. Nothing is deleted; you just can't add more until next month or you upgrade." },
+  { q: "Can I cancel anytime?", a: "Yes, from the billing portal. You keep paid features until the end of the period you've paid for, then drop to free." },
+  { q: "Is billing live yet?", a: "The architecture is built and tested (Stripe checkout, webhooks, entitlements). It switches on when the deployment's Stripe keys are configured." },
+];
 
 const COPY: Record<string, { price: string; blurb: string; highlights: string[] }> = {
   free: {
@@ -61,6 +69,9 @@ export default function PricingPage() {
           );
         })}
       </div>
+
+      <h2 className="mt-14 text-xl font-semibold tracking-tight">Questions</h2>
+      <Faq items={FAQS} className="mt-4 max-w-2xl" />
     </div>
   );
 }
