@@ -9,9 +9,24 @@ or *estimated*.
 
 ## Status
 
-**Phase 1 (Foundation) complete.** See [`docs/roadmap.md`](docs/roadmap.md) for what
-is real vs. pending. Features not yet built are shown as honest, labelled placeholders
-in the app — never faked.
+**Phases 1–6 implemented; Phase 7 infra partial.** See [`docs/roadmap.md`](docs/roadmap.md)
+for the exact state of every feature. What works today, end to end:
+
+- Auth (dev shim), onboarding → personalized, scored recommendations
+- Opportunities: browse / filter / search / save / compare / "make this my focus"
+- Plans (opportunity template → real tasks), Tasks, Projects (+ milestones), Goals
+  (8 metrics, auto-tracked from your data)
+- CRM: contacts, pipeline board, activity log, follow-ups → tasks, CSV import
+- Money: revenue / expense / profit, projected vs. actual, invoices, monthly chart
+- Outreach: composer + draft generation, honest status tracking
+- AI: grounded assistant + 7 generators (rule-based fallback with no key — labelled)
+- Billing: Stripe checkout + webhook architecture; entitlements + usage limits
+- Global: dark/light theme, ⌘K search, notifications, cookie consent, mobile nav,
+  back-to-top, FAQ, copy buttons, confirm dialogs, print styles, a11y
+
+Anything requiring a production credential (Clerk, Stripe, Anthropic, Pinecone,
+Resend, PostHog, Sentry, Upstash) has its integration built and degrades honestly
+without the key — it is never faked. 43 tests, CI, RLS policies included.
 
 ## Stack
 
@@ -40,7 +55,10 @@ test account (tick "admin" for `/admin`). Complete onboarding to reach the dashb
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
+| `npm test` / `test:watch` / `test:coverage` | Vitest |
 | `npm run db:migrate` / `db:deploy` / `db:seed` / `db:studio` / `db:reset` | Prisma |
+
+Full verification (what CI runs): `npm run typecheck && npm run lint && npm test && npm run build`
 
 ## Layout
 

@@ -48,24 +48,41 @@ Every feature maps onto a stage:
 ## 4. Layering
 
 ```
-app/(marketing)      public site (RSC)
-app/(auth)           sign-in
+app/(marketing)      public site (RSC) — landing, pricing, how-it-works, legal
+app/(auth)           sign-in (dev shim UI / Clerk mount point)
 app/onboarding       personalization intake
-app/(app)/*          authenticated dashboard
+app/(app)/*          authenticated dashboard: dashboard, opportunities, plan,
+                     projects, goals, tasks, leads, outreach, money, ai, saved,
+                     analytics, settings, billing
 app/admin            server-gated admin
+app/actions/*        cross-cutting server actions (search, notifications, feedback)
 app/api/*            route handlers: health + webhooks (Clerk, Stripe)
 
 src/lib/*            framework-agnostic building blocks
   env.ts            zod-validated env + `integrations` capability flags
-  auth/             identity resolution (dev shim | Clerk)
+  form.ts           shared FormState for useActionState / ActionDialog
+  auth/             identity resolution (dev shim | Clerk) + dev sign-in action
   db.ts             Prisma singleton w/ provider-selected adapter
   entitlements/     plan → limits/features map + hasFeature()/checkUsage()
+  usage.ts          UsageCounter helpers: assertWithinLimit / recordUsage
   scoring/fit.ts    deterministic Opportunity Fit Score (pure, tested)
   onboarding/       question config + submission schema
   validations/      Zod unions — the single source of truth for "enum" strings
+  attribution.ts    first-touch UTM parse/validate (allow-list)
+  audit.ts          append-only AuditLog writer
+  stripe.ts         lazy Stripe client + price↔plan map
+  ai/               provider abstraction, generators (+ rule-based), prompts
+  email/            Resend adapter + console fallback (never claims delivery)
+  analytics/        PostHog server capture + PII/financial scrubbing
 
 src/server/services/*   the ENFORCED authorization boundary.
   Every function takes an authenticated userId and scopes all queries by it.
+  profile, onboarding, opportunities, dashboard, plans, tasks, projects, goals,
+  crm, money, outreach, leads, search, notifications, billing, checkout, ai,
+  analytics.
+
+src/components/*     design system: ui/ primitives + theme/, app-nav, global-search,
+  notification-bell, cookie-banner, contact-button, attribution-capture, phase-stub
 ```
 
 Rules:
