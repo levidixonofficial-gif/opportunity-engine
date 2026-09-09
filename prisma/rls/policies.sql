@@ -16,8 +16,14 @@
 -- ---------------------------------------------------------------------------
 
 -- Helper: the internal User.id for the current JWT subject.
+--
+-- SECURITY DEFINER: the "User" table is locked (RLS on, no policy), so an
+-- ordinary authenticated connection cannot read it directly. The helper must run
+-- with the owner's rights to resolve clerkId -> User.id, otherwise every policy
+-- below would evaluate against NULL and deny all access. search_path is pinned so
+-- the definer context cannot be hijacked by a caller-set path.
 create or replace function current_app_user_id() returns text
-language sql stable as $$
+language sql stable security definer set search_path = public, pg_temp as $$
   select id from "User" where "clerkId" = auth.jwt() ->> 'sub' limit 1
 $$;
 
@@ -70,6 +76,23 @@ create policy "AiMessage_owner" on "AiMessage"
     select 1 from "AiConversation" c
     where c.id = "AiMessage"."conversationId" and c."userId" = current_app_user_id()
   ));
+
+-- Profile join tables (ProfileSkill / ProfileInterest): owned transitively
+-- through the Profile row (composite PK, no userId column of their own).
+do $$
+declare t text;
+begin
+  foreach t in array array['ProfileSkill','ProfileInterest']
+  loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_owner', t);
+    execute format($f$
+      create policy %I on %I
+      using (exists (select 1 from "Profile" p where p."id" = %I."profileId" and p."userId" = current_app_user_id()))
+      with check (exists (select 1 from "Profile" p where p."id" = %I."profileId" and p."userId" = current_app_user_id()))
+    $f$, t || '_owner', t, t, t);
+  end loop;
+end $$;
 
 -- Public reference data: readable by everyone, writable only by service role.
 do $$

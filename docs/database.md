@@ -39,9 +39,26 @@ is a generated preview of exactly what the first Postgres migration will create
    migrations for Postgres. Diff the result against `postgres-preview.sql`.
 5. `npm run db:seed`.
 6. Apply RLS policies: `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`.
-7. Verify: run the isolation suite against the new DB
-   (`DATABASE_URL=<postgres> npx vitest run tests/isolation.test.ts` — point
-   `tests/setup.ts`/`global-setup` at it, or set the env inline).
+   Supabase already provides `auth.jwt()`; nothing else to install.
+7. Verify RLS + isolation. `npm run verify:rls` runs the full policy check against
+   real PostgreSQL 18 (PGlite, in-process, no Docker) — SELECT visibility, INSERT
+   `WITH CHECK`, UPDATE/DELETE scoping, locked tables (`User`/`AuditLog`/
+   `WebhookEvent`), transitive ownership (`Milestone`, `AiMessage`), and cross-user
+   isolation across every owned entity. It also runs in CI (the `postgres` job).
+   Against the live Supabase DB, additionally run the Prisma service-layer suite:
+   `DATABASE_PROVIDER=postgresql DATABASE_URL=<direct> npx vitest run tests/isolation.test.ts`.
+
+### Keeping `postgres-preview.sql` honest
+
+CI (`postgres` job) regenerates the diff from `schema.prisma` and fails if it no
+longer matches `prisma/postgres-preview.sql`, so the preview can never drift from
+the schema. Regenerate it after any schema change:
+
+```
+sed 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma > /tmp/pg.prisma
+npx prisma migrate diff --from-empty --to-schema /tmp/pg.prisma --script > prisma/postgres-preview.sql
+# then re-add the header comment block
+```
 
 ## Schema overview
 
@@ -82,9 +99,21 @@ with a policy of the form:
 
 ```sql
 alter table "Task" enable row level security;
-create policy task_owner on "Task"
-  using ("userId" = (select id from "User" where "clerkId" = auth.jwt()->>'sub'));
+create policy "Task_owner" on "Task"
+  using ("userId" = current_app_user_id())
+  with check ("userId" = current_app_user_id());
 ```
+
+`current_app_user_id()` resolves `auth.jwt()->>'sub'` (the Clerk subject) to the
+internal `User.id`. It is **`SECURITY DEFINER`** with a pinned `search_path`: the
+`User` table is locked (RLS on, no policy), so an ordinary authenticated
+connection cannot read it, and without definer rights every policy would evaluate
+against `NULL` and deny all access.
+
+Coverage: all 24 directly-owned tables (`using` + `with check`), `Milestone` and
+`AiMessage` (transitive ownership), `ProfileSkill`/`ProfileInterest` (owned via
+`Profile`), public read-only reference tables, and `User`/`AuditLog`/`WebhookEvent`
+fully locked (RLS on, no policy = service-role only). Verified by `npm run verify:rls`.
 
 The **enforced** boundary is still the service layer (`src/server/services/*`), which
 scopes by `userId` derived from the verified session. RLS is defense-in-depth for any

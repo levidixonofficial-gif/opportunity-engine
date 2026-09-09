@@ -17,7 +17,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "pg:up": "node scripts/pglite-server.mjs",
+    "verify:rls": "node scripts/verify-rls.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.1",
@@ -45,6 +47,8 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.13.3",

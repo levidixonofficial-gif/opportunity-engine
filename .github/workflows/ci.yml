@@ -27,6 +27,28 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Postgres / Supabase readiness — runs against real PostgreSQL 18 (PGlite,
+  # in-process, no Docker): proves the generated Postgres schema is current, and
+  # that prisma/rls/policies.sql actually enforces per-user isolation.
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # 1. schema drift: postgres-preview.sql must match a fresh diff of schema.prisma
+      - name: Postgres schema is up to date
+        run: |
+          sed 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma > /tmp/pg.prisma
+          npx prisma migrate diff --from-empty --to-schema /tmp/pg.prisma --script 2>/dev/null \
+            | grep -vE 'injected env|Loaded Prisma config' > /tmp/fresh.sql
+          diff <(tail -n +16 prisma/postgres-preview.sql | grep -vE '^\s*$') <(grep -vE '^\s*$' /tmp/fresh.sql)
+      # 2. RLS + cross-user isolation against real Postgres
+      - run: npm run verify:rls
+
   audit:
     runs-on: ubuntu-latest
     steps:
