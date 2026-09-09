@@ -76,6 +76,14 @@ interface OppSeed {
   isServiceBased: boolean;
   beginnerFriendly: boolean;
   featured?: boolean;
+  // Phase 2 depth
+  ongoingCostBand?: string;
+  geoDependence?: string;
+  repeatRevenuePotential?: number;
+  salesCycle?: string;
+  targetCustomer?: string;
+  prerequisites?: string;
+  failureModes?: string;
   revenueModel: string;
   monetizationNotes: string;
   riskNotes: string;
@@ -87,6 +95,113 @@ interface OppSeed {
   steps: { phase: string; title: string; detail: string }[];
   examples: { title: string; detail: string }[];
 }
+
+// Phase 2 depth, keyed by slug. Merged into each opportunity at seed time so the
+// OPPS array stays readable. All descriptive — nothing implies guaranteed income.
+const PHASE2: Record<
+  string,
+  Pick<
+    OppSeed,
+    | "ongoingCostBand"
+    | "geoDependence"
+    | "repeatRevenuePotential"
+    | "salesCycle"
+    | "targetCustomer"
+    | "prerequisites"
+    | "failureModes"
+  >
+> = {
+  "ai-lead-gen-for-local-businesses": {
+    ongoingCostBand: "50_250",
+    geoDependence: "none",
+    repeatRevenuePotential: 4,
+    salesCycle: "short",
+    targetCustomer: "Owners of local service businesses (roofers, dentists, gyms, contractors) who need more customers but have no time to prospect.",
+    prerequisites: "Comfort writing short messages, a spreadsheet, and an email tool with decent deliverability. No audience needed.",
+    failureModes: "Picking too broad a niche; sending generic blasts; landing a client whose own sales follow-up is so weak that booked calls go nowhere.",
+  },
+  "freelance-writing-services": {
+    ongoingCostBand: "lt_50",
+    geoDependence: "none",
+    repeatRevenuePotential: 3,
+    salesCycle: "short",
+    targetCustomer: "Marketing leads at small B2B companies, agencies, and solo founders who publish content but can't keep up.",
+    prerequisites: "The ability to write clearly and hit a deadline, plus 2–3 samples in a chosen niche.",
+    failureModes: "Staying a generalist and competing on price; taking any topic; underpricing the first client and never raising rates.",
+  },
+  "pressure-washing-side-business": {
+    ongoingCostBand: "50_250",
+    geoDependence: "local",
+    repeatRevenuePotential: 4,
+    salesCycle: "immediate",
+    targetCustomer: "Homeowners in a defined neighborhood; later, property managers and small commercial sites.",
+    prerequisites: "A vehicle, ~$400–$800 for a washer and surface cleaner, physical capability, and basic insurance before paid work.",
+    failureModes: "Damaging a surface from bad technique; underquoting travel time; treating it as one-off jobs instead of building a repeat route.",
+  },
+  "notion-template-shop": {
+    ongoingCostBand: "lt_50",
+    geoDependence: "none",
+    repeatRevenuePotential: 3,
+    salesCycle: "immediate",
+    targetCustomer: "People with a specific recurring workflow problem — freelancers, small teams, creators — who will pay $10–$60 to skip setup.",
+    prerequisites: "You must actually use the tool and the workflow yourself, plus a way to drive traffic (audience, SEO, or communities).",
+    failureModes: "Building a 'life OS' nobody searches for; no marketing plan; competing in a saturated category with no distribution.",
+  },
+  "short-form-video-editing": {
+    ongoingCostBand: "lt_50",
+    geoDependence: "none",
+    repeatRevenuePotential: 4,
+    salesCycle: "short",
+    targetCustomer: "Coaches, founders, and creators who film regularly but don't have time to cut and caption.",
+    prerequisites: "An editor you know well, taste built from studying good shorts, and 2–3 spec edits.",
+    failureModes: "Slow turnaround; unlimited revisions with no cap; clients who stop filming so the retainer dies.",
+  },
+  "bookkeeping-for-small-businesses": {
+    ongoingCostBand: "50_250",
+    geoDependence: "none",
+    repeatRevenuePotential: 5,
+    salesCycle: "medium",
+    targetCustomer: "Small local businesses (trades, restaurants, clinics) that dread receipts and reconciliation.",
+    prerequisites: "A reputable bookkeeping basics course and fluency in one accounting platform. Accuracy and discretion are non-negotiable.",
+    failureModes: "Drifting into tax advice you're not qualified to give; unclear monthly scope; taking on messy clients without a cleanup fee.",
+  },
+  "print-on-demand-store": {
+    ongoingCostBand: "50_250",
+    geoDependence: "none",
+    repeatRevenuePotential: 2,
+    salesCycle: "immediate",
+    targetCustomer: "Members of a specific community or identity group who would wear a design only an insider gets.",
+    prerequisites: "Design ability (or a tool), a storefront, sample orders to check quality, and a small ad-test budget.",
+    failureModes: "Generic 'funny shirt' designs; ignoring base cost + shipping time; IP problems; scaling ads before a design proves itself.",
+  },
+  "ai-automation-consulting": {
+    ongoingCostBand: "50_250",
+    geoDependence: "none",
+    repeatRevenuePotential: 4,
+    salesCycle: "medium",
+    targetCustomer: "Small business owners with 3–4 repetitive workflows quietly wasting hours a week.",
+    prerequisites: "Working knowledge of a no-code automation platform and an AI API, plus one automation you've built end-to-end.",
+    failureModes: "Tool sprawl and silent breakage; scoping creep; over-promising reliability; automating a process that isn't stable enough yet.",
+  },
+  "niche-newsletter": {
+    ongoingCostBand: "lt_50",
+    geoDependence: "none",
+    repeatRevenuePotential: 5,
+    salesCycle: "long",
+    targetCustomer: "Readers in an underserved niche; later, advertisers who want to reach them.",
+    prerequisites: "The ability to publish something genuinely useful every week and sustain it for months before monetizing.",
+    failureModes: "Quitting before compounding kicks in; a niche with no advertiser budget; inconsistent sending; buying subscribers.",
+  },
+  "virtual-assistant-services": {
+    ongoingCostBand: "lt_50",
+    geoDependence: "none",
+    repeatRevenuePotential: 4,
+    salesCycle: "short",
+    targetCustomer: "Busy solo operators — coaches, agency owners, realtors, consultants — drowning in admin.",
+    prerequisites: "Strong organization, clear communication, and a password manager for handling client access safely.",
+    failureModes: "Staying a low-paid generalist; over-reliance on one client; no documented processes so you can't be trusted with more.",
+  },
+};
 
 const OPPS: OppSeed[] = [
   {
@@ -530,53 +645,40 @@ async function main() {
 
   for (const o of OPPS) {
     const categoryId = categoryIds.get(o.category)!;
+    const p2 = PHASE2[o.slug] ?? {};
+    const common = {
+      name: o.name,
+      categoryId,
+      summary: o.summary,
+      description: o.description,
+      difficulty: o.difficulty,
+      learningCurve: o.learningCurve,
+      competitionLevel: o.competitionLevel,
+      scalability: o.scalability,
+      demandScore: o.demandScore,
+      startupCostBand: o.startupCostBand,
+      timeCommitment: o.timeCommitment,
+      isOnline: o.isOnline,
+      isServiceBased: o.isServiceBased,
+      beginnerFriendly: o.beginnerFriendly,
+      featured: o.featured ?? false,
+      ongoingCostBand: p2.ongoingCostBand ?? o.ongoingCostBand ?? "lt_50",
+      geoDependence: p2.geoDependence ?? o.geoDependence ?? "none",
+      repeatRevenuePotential: p2.repeatRevenuePotential ?? o.repeatRevenuePotential ?? 3,
+      salesCycle: p2.salesCycle ?? o.salesCycle ?? "short",
+      targetCustomer: p2.targetCustomer ?? o.targetCustomer ?? "",
+      prerequisites: p2.prerequisites ?? o.prerequisites ?? "",
+      failureModes: p2.failureModes ?? o.failureModes ?? "",
+      revenueModel: o.revenueModel,
+      monetizationNotes: o.monetizationNotes,
+      riskNotes: o.riskNotes,
+      profitFactors: o.profitFactors,
+      status: "published",
+    };
     const opp = await db.opportunity.upsert({
       where: { slug: o.slug },
-      update: {
-        name: o.name,
-        categoryId,
-        summary: o.summary,
-        description: o.description,
-        difficulty: o.difficulty,
-        learningCurve: o.learningCurve,
-        competitionLevel: o.competitionLevel,
-        scalability: o.scalability,
-        demandScore: o.demandScore,
-        startupCostBand: o.startupCostBand,
-        timeCommitment: o.timeCommitment,
-        isOnline: o.isOnline,
-        isServiceBased: o.isServiceBased,
-        beginnerFriendly: o.beginnerFriendly,
-        featured: o.featured ?? false,
-        revenueModel: o.revenueModel,
-        monetizationNotes: o.monetizationNotes,
-        riskNotes: o.riskNotes,
-        profitFactors: o.profitFactors,
-        status: "published",
-      },
-      create: {
-        slug: o.slug,
-        name: o.name,
-        categoryId,
-        summary: o.summary,
-        description: o.description,
-        difficulty: o.difficulty,
-        learningCurve: o.learningCurve,
-        competitionLevel: o.competitionLevel,
-        scalability: o.scalability,
-        demandScore: o.demandScore,
-        startupCostBand: o.startupCostBand,
-        timeCommitment: o.timeCommitment,
-        isOnline: o.isOnline,
-        isServiceBased: o.isServiceBased,
-        beginnerFriendly: o.beginnerFriendly,
-        featured: o.featured ?? false,
-        revenueModel: o.revenueModel,
-        monetizationNotes: o.monetizationNotes,
-        riskNotes: o.riskNotes,
-        profitFactors: o.profitFactors,
-        status: "published",
-      },
+      update: common,
+      create: { slug: o.slug, ...common },
     });
 
     // Reset child rows for idempotency

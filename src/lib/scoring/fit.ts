@@ -41,6 +41,10 @@ export interface ScorerOpportunity {
   requiredSkillSlugs: string[];
   helpfulSkillSlugs: string[];
   interestSlugs: string[];
+  /** Phase 2 fields (optional so older callers/tests still work). */
+  geoDependence?: "none" | "local" | "regional";
+  repeatRevenuePotential?: number; // 1-5
+  salesCycle?: "immediate" | "short" | "medium" | "long";
 }
 
 interface Component {
@@ -167,11 +171,11 @@ function marketConditions(o: ScorerOpportunity): Component {
 }
 
 function difficultyFit(p: ScorerProfile, o: ScorerOpportunity): Component {
-  const weight = 10;
+  const weight = 8;
   const exp = p.experienceLevel ? EXPERIENCE_RANK[p.experienceLevel] : 1;
   // beginners want low difficulty; experienced users are unbothered
   const tolerance = 2 + exp; // 2..4
-  const score = o.difficulty <= tolerance ? 1 : o.difficulty - tolerance === 1 ? 0.5 : 0.2;
+  const score = o.difficulty <= tolerance ? 1 : o.difficulty - tolerance === 1 ? 0.5 : 0.15;
   return {
     key: "difficulty",
     label: "Difficulty fit",
@@ -179,6 +183,48 @@ function difficultyFit(p: ScorerProfile, o: ScorerOpportunity): Component {
     score,
     reason: score < 1 ? "Steeper than typical for your stated experience" : undefined,
   };
+}
+
+function scalabilityFit(p: ScorerProfile, o: ScorerOpportunity): Component {
+  const weight = 8;
+  const wantsScale = p.primaryGoal === "build_business" || p.primaryGoal === "replace_income";
+  const wantsSmall = p.primaryGoal === "first_100" || p.primaryGoal === "learn_skill";
+  const repeat = o.repeatRevenuePotential ?? 3;
+  let score: number;
+  let reason: string | undefined;
+  if (wantsScale) {
+    score = (o.scalability - 1) / 4 * 0.7 + (repeat - 1) / 4 * 0.3;
+    if (o.scalability >= 4) reason = "Can grow past trading hours for dollars";
+    else if (o.scalability <= 2) reason = "Hard to scale beyond your own hours";
+  } else if (wantsSmall) {
+    score = 0.7; // scale doesn't matter much for a first win
+  } else {
+    score = 0.35 + ((o.scalability - 1) / 4) * 0.5 + ((repeat - 1) / 4) * 0.15;
+    if (repeat >= 4) reason = "Repeat / recurring revenue is realistic here";
+  }
+  return { key: "scalability", label: "Scalability fit", weight, score: clamp01(score), reason };
+}
+
+function geoFit(p: ScorerProfile, o: ScorerOpportunity): Component {
+  const weight = 6;
+  const geo = o.geoDependence ?? "none";
+  if (geo === "none") {
+    return { key: "geo", label: "Location fit", weight, score: 1, reason: undefined };
+  }
+  // local/regional businesses are fine, but note the constraint for scale-focused goals
+  const wantsScale = p.primaryGoal === "build_business" || p.primaryGoal === "replace_income";
+  const score = geo === "local" ? (wantsScale ? 0.55 : 0.8) : wantsScale ? 0.7 : 0.85;
+  return {
+    key: "geo",
+    label: "Location fit",
+    weight,
+    score,
+    reason: geo === "local" ? "Tied to a local service area" : "Somewhat location-dependent",
+  };
+}
+
+function clamp01(n: number) {
+  return Math.max(0, Math.min(1, n));
 }
 
 export interface FitResult {
@@ -195,12 +241,19 @@ export function scoreOpportunity(p: ScorerProfile, o: ScorerOpportunity): FitRes
     goalAlignment(p, o),
     marketConditions(o),
     difficultyFit(p, o),
+    scalabilityFit(p, o),
+    geoFit(p, o),
     interestFit(p, o),
   ];
 
   const totalWeight = components.reduce((s, c) => s + c.weight, 0);
   const weighted = components.reduce((s, c) => s + c.score * c.weight, 0);
-  const score = Math.round((weighted / totalWeight) * 100);
+  const raw = weighted / totalWeight; // 0..1
+
+  // Widen the usable range: a genuinely poor match should land in the 30s-40s,
+  // not the 60s. Map [0.2,0.95] -> [0,100], clamped.
+  const stretched = (raw - 0.2) / (0.95 - 0.2);
+  const score = Math.max(0, Math.min(100, Math.round(stretched * 100)));
 
   const reasons = components
     .filter((c) => c.reason)

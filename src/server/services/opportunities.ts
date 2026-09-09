@@ -40,6 +40,9 @@ function toScorer(o: OpportunityRow): ScorerOpportunity {
     requiredSkillSlugs: o.skills.filter((s) => s.weight === "required").map((s) => s.skill.slug),
     helpfulSkillSlugs: o.skills.filter((s) => s.weight === "helpful").map((s) => s.skill.slug),
     interestSlugs: o.interests.map((i) => i.interest.slug),
+    geoDependence: o.geoDependence as "none" | "local" | "regional",
+    repeatRevenuePotential: o.repeatRevenuePotential,
+    salesCycle: o.salesCycle as "immediate" | "short" | "medium" | "long",
   };
 }
 

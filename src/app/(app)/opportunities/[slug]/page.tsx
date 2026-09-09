@@ -52,12 +52,23 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             <CardHeader><CardTitle>Overview</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
               <p>{o.description}</p>
+              {o.targetCustomer && <Prose label="Who pays" value={o.targetCustomer} />}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Fact label="Estimated startup cost" value={BUDGET_LABELS[o.startupCostBand as keyof typeof BUDGET_LABELS]} />
+                <Fact label="Estimated ongoing cost / mo" value={BUDGET_LABELS[o.ongoingCostBand as keyof typeof BUDGET_LABELS] ?? "—"} />
                 <Fact label="Typical time requirement" value={TIME_LABELS[o.timeCommitment as keyof typeof TIME_LABELS]} />
                 <Fact label="Format" value={o.isOnline ? "Online" : "Local / in-person"} />
                 <Fact label="Type" value={o.isServiceBased ? "Service" : "Product"} />
+                <Fact label="Location dependence" value={o.geoDependence === "none" ? "Not location-bound" : o.geoDependence} />
+                <Fact label="Sales cycle" value={o.salesCycle} />
+                <Fact label="Repeat revenue potential" value={`${o.repeatRevenuePotential}/5`} />
               </div>
+              {o.prerequisites && (
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted">Before you start</p>
+                  <p className="mt-0.5">{o.prerequisites}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -87,6 +98,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
               <Prose label="Possible monetization" value={o.monetizationNotes} />
               <Prose label="Risk considerations" value={o.riskNotes} />
               <Prose label="Factors that influence profitability" value={o.profitFactors} />
+              {o.failureModes && <Prose label="Common ways this doesn't work out" value={o.failureModes} />}
               <p className="rounded-md bg-surface-2 p-3 text-xs text-muted">
                 These are descriptions of how businesses in this space typically work. Opportunity
                 Engine does not predict or guarantee any income.
