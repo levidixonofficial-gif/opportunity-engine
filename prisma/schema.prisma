@@ -799,4 +799,22 @@ model AuditLog {
 
   @@index([actorId])
   @@index([targetType, targetId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Webhook idempotency — one row per successfully-processed external event.
+// A unique (provider, eventId) makes redelivery a cheap no-op.
+// ---------------------------------------------------------------------------
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String // "stripe" | "clerk"
+  eventId     String
+  type        String
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, type])
 }

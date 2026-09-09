@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { GoalMetric, GoalStatus } from "@/lib/validations/enums";
+import { NotFoundError } from "@/lib/errors";
 import { z } from "zod";
 
 export const goalInputSchema = z.object({
@@ -35,7 +36,7 @@ export async function createGoal(userId: string, input: GoalInput) {
 
 export async function updateGoal(userId: string, id: string, input: Partial<GoalInput>) {
   const owned = await db.goal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Goal not found");
+  if (!owned) throw new NotFoundError("That goal");
   const data = goalInputSchema.partial().parse(input);
   const goal = await db.goal.update({ where: { id }, data });
   await recomputeGoal(userId, id);
@@ -45,13 +46,13 @@ export async function updateGoal(userId: string, id: string, input: Partial<Goal
 export async function setGoalStatus(userId: string, id: string, status: z.infer<typeof GoalStatus>) {
   GoalStatus.parse(status);
   const owned = await db.goal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Goal not found");
+  if (!owned) throw new NotFoundError("That goal");
   return db.goal.update({ where: { id }, data: { status } });
 }
 
 export async function deleteGoal(userId: string, id: string) {
   const owned = await db.goal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Goal not found");
+  if (!owned) throw new NotFoundError("That goal");
   await db.goal.delete({ where: { id } });
 }
 
@@ -63,8 +64,9 @@ export async function recomputeGoal(userId: string, goalId: string) {
   let current = goal.currentValue;
   switch (goal.metric) {
     case "revenue": {
+      // Only ACTUAL money counts toward a revenue goal — projections do not.
       const agg = await db.transaction.aggregate({
-        where: { userId, type: "revenue" },
+        where: { userId, type: "revenue", isEstimated: false },
         _sum: { amountCents: true },
       });
       current = agg._sum.amountCents ?? 0;
@@ -72,8 +74,8 @@ export async function recomputeGoal(userId: string, goalId: string) {
     }
     case "profit": {
       const [rev, exp] = await Promise.all([
-        db.transaction.aggregate({ where: { userId, type: "revenue" }, _sum: { amountCents: true } }),
-        db.transaction.aggregate({ where: { userId, type: "expense" }, _sum: { amountCents: true } }),
+        db.transaction.aggregate({ where: { userId, type: "revenue", isEstimated: false }, _sum: { amountCents: true } }),
+        db.transaction.aggregate({ where: { userId, type: "expense", isEstimated: false }, _sum: { amountCents: true } }),
       ]);
       current = (rev._sum.amountCents ?? 0) - (exp._sum.amountCents ?? 0);
       break;

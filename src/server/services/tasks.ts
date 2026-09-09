@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { TaskStatus, TaskPriority } from "@/lib/validations/enums";
+import { NotFoundError } from "@/lib/errors";
 import { recomputeGoalsForMetric } from "@/server/services/goals";
 
 export const taskInputSchema = z.object({
@@ -16,20 +17,24 @@ export type TaskInput = z.infer<typeof taskInputSchema>;
 
 async function assertOwnedTask(userId: string, id: string) {
   const t = await db.task.findFirst({ where: { id, userId } });
-  if (!t) throw new Error("Task not found");
+  if (!t) throw new NotFoundError("That task");
   return t;
 }
 
 export async function createTask(userId: string, input: TaskInput) {
   const data = taskInputSchema.parse(input);
-  // Validate any linked parents belong to the same user.
+  // Validate every linked parent belongs to the same user (relationship tampering).
   if (data.projectId) {
     const p = await db.project.findFirst({ where: { id: data.projectId, userId }, select: { id: true } });
-    if (!p) throw new Error("Project not found");
+    if (!p) throw new NotFoundError("That project");
   }
   if (data.contactId) {
     const c = await db.contact.findFirst({ where: { id: data.contactId, userId }, select: { id: true } });
-    if (!c) throw new Error("Contact not found");
+    if (!c) throw new NotFoundError("That contact");
+  }
+  if (data.planId) {
+    const pl = await db.plan.findFirst({ where: { id: data.planId, userId }, select: { id: true } });
+    if (!pl) throw new NotFoundError("That plan");
   }
   const maxOrder = await db.task.aggregate({
     where: { userId, projectId: data.projectId ?? null },

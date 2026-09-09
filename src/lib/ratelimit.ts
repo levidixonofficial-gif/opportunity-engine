@@ -17,12 +17,21 @@ interface Bucket {
   resetAt: number;
 }
 const memory = new Map<string, Bucket>();
+const MEMORY_CAP = 20_000;
+
+/** Drop expired buckets; if still over the cap, clear the whole map (fail-open briefly). */
+function sweepMemory(now: number) {
+  if (memory.size < MEMORY_CAP) return;
+  for (const [k, v] of memory) if (v.resetAt < now) memory.delete(k);
+  if (memory.size >= MEMORY_CAP) memory.clear();
+}
 
 function memoryLimiter(limit: number, windowMs: number): Limiter {
   return async (key) => {
     const now = Date.now();
     const b = memory.get(key);
     if (!b || b.resetAt < now) {
+      sweepMemory(now);
       memory.set(key, { count: 1, resetAt: now + windowMs });
       return { success: true, remaining: limit - 1, reset: now + windowMs };
     }

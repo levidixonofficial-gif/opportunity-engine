@@ -91,6 +91,44 @@ if (!parsedPublic.success) {
 export const env = parsedServer.data;
 export const publicEnv = parsedPublic.data;
 
+type ServerEnv = z.infer<typeof serverSchema>;
+type PublicEnv = z.infer<typeof publicSchema>;
+
+/**
+ * Insecure-configuration check. Returns a list of problems (empty = safe).
+ * Exported for testing; run automatically below for a real production boot.
+ */
+export function productionConfigProblems(s: ServerEnv, p: PublicEnv): string[] {
+  const problems: string[] = [];
+  if (s.AUTH_MODE !== "clerk") {
+    problems.push("AUTH_MODE must be 'clerk' in production (the dev signed-cookie shim is insecure).");
+  }
+  if (s.AUTH_MODE === "clerk" && (!s.CLERK_SECRET_KEY || !p.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)) {
+    problems.push("AUTH_MODE=clerk requires CLERK_SECRET_KEY and NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.");
+  }
+  if (s.DEV_AUTH_SECRET === "dev-only-insecure-secret-change-me") {
+    problems.push("DEV_AUTH_SECRET is still the checked-in default.");
+  }
+  if (s.DATABASE_PROVIDER !== "postgresql") {
+    problems.push("DATABASE_PROVIDER must be 'postgresql' in production (SQLite is ephemeral on serverless).");
+  }
+  if (/localhost|127\.0\.0\.1/.test(p.NEXT_PUBLIC_APP_URL)) {
+    problems.push("NEXT_PUBLIC_APP_URL still points at localhost.");
+  }
+  return problems;
+}
+
+// Refuse to boot with insecure development defaults in production. Skipped during
+// `next build` (NODE_ENV is "production" there but the build box has dev values).
+if (env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+  const problems = productionConfigProblems(env, publicEnv);
+  if (problems.length) {
+    throw new Error(
+      `Refusing to start in production with insecure configuration:\n${problems.map((x) => `  - ${x}`).join("\n")}`,
+    );
+  }
+}
+
 /** True when a given optional integration is configured. */
 export const integrations = {
   clerk: env.AUTH_MODE === "clerk" && !!env.CLERK_SECRET_KEY,

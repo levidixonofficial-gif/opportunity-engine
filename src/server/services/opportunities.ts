@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { scoreOpportunity, type FitResult, type ScorerOpportunity } from "@/lib/scoring/fit";
 import { getScorerProfile } from "@/server/services/profile";
 import { entitlementsFor } from "@/lib/entitlements";
+import { textSearch } from "@/lib/db-helpers";
 import { BudgetBand, TimeBand, type SubscriptionPlan } from "@/lib/validations/enums";
 import type { Prisma } from "@prisma/client";
 
@@ -64,11 +65,8 @@ export async function listOpportunities(
   if (typeof filters.isServiceBased === "boolean") where.isServiceBased = filters.isServiceBased;
   if (filters.beginnerFriendly) where.beginnerFriendly = true;
   if (filters.q) {
-    where.OR = [
-      { name: { contains: filters.q } },
-      { summary: { contains: filters.q } },
-      { description: { contains: filters.q } },
-    ];
+    const t = textSearch(filters.q);
+    where.OR = [{ name: t }, { summary: t }, { description: t }];
   }
 
   const rows = await db.opportunity.findMany({ where, include: listInclude });

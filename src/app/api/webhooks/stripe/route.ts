@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { env, integrations } from "@/lib/env";
 import { stripe, planForPrice, normalizeStatus } from "@/lib/stripe";
+import { captureException } from "@/lib/observability";
 import { writeAudit } from "@/lib/audit";
 import { createNotification } from "@/server/services/notifications";
 import { sendEmail } from "@/lib/email";
@@ -13,6 +14,10 @@ export const dynamic = "force-dynamic";
  * Stripe webhook. Verifies the signature against STRIPE_WEBHOOK_SECRET, then
  * writes plan + status onto the Subscription row — the single source of truth
  * the app reads. The browser never determines paid status.
+ *
+ * Idempotent: every processed event id is recorded in WebhookEvent with a unique
+ * (provider, eventId), so Stripe's at-least-once redelivery is a no-op.
+ * Error responses are deliberately generic — internals are logged, not returned.
  */
 export async function POST(req: Request) {
   if (!integrations.stripe || !env.STRIPE_WEBHOOK_SECRET) {
@@ -26,11 +31,18 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = stripe().webhooks.constructEvent(body, sig, env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return NextResponse.json(
-      { error: `Signature verification failed: ${err instanceof Error ? err.message : "unknown"}` },
-      { status: 400 },
-    );
+  } catch {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // Idempotency guard.
+  try {
+    await db.webhookEvent.create({
+      data: { provider: "stripe", eventId: event.id, type: event.type },
+    });
+  } catch {
+    // Unique violation => already processed.
+    return NextResponse.json({ received: true, duplicate: true });
   }
 
   try {
@@ -40,10 +52,7 @@ export async function POST(req: Request) {
         const customerId = session.customer as string;
         const userId = (session.metadata?.userId ?? session.client_reference_id) as string | undefined;
         if (userId) {
-          await db.subscription.updateMany({
-            where: { userId },
-            data: { stripeCustomerId: customerId },
-          });
+          await db.subscription.updateMany({ where: { userId }, data: { stripeCustomerId: customerId } });
         }
         break;
       }
@@ -105,9 +114,9 @@ export async function POST(req: Request) {
     await writeAudit({ action: `stripe.${event.type}`, targetType: "stripe_event", targetId: event.id });
     return NextResponse.json({ received: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "handler error" },
-      { status: 500 },
-    );
+    captureException(err, { where: "stripe_webhook", eventType: event.type });
+    // Remove the idempotency row so Stripe's retry can re-attempt this event.
+    await db.webhookEvent.deleteMany({ where: { provider: "stripe", eventId: event.id } }).catch(() => undefined);
+    return NextResponse.json({ error: "Webhook handler error" }, { status: 500 });
   }
 }

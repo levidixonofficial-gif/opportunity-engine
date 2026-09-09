@@ -2,7 +2,16 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { DealStage, InteractionType, VerificationStatus } from "@/lib/validations/enums";
+import { NotFoundError } from "@/lib/errors";
+import { textSearch } from "@/lib/db-helpers";
 import { recomputeGoalsForMetric } from "@/server/services/goals";
+
+/** Throw NotFoundError unless the referenced project belongs to the user. */
+async function assertProjectOwned(userId: string, projectId: string | null | undefined) {
+  if (!projectId) return;
+  const p = await db.project.findFirst({ where: { id: projectId, userId }, select: { id: true } });
+  if (!p) throw new NotFoundError("That project");
+}
 
 export const contactInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -33,11 +42,8 @@ export async function listContacts(userId: string, opts: { stage?: string; q?: s
   const where: Prisma.ContactWhereInput = { userId };
   if (opts.stage) where.stage = opts.stage;
   if (opts.q) {
-    where.OR = [
-      { name: { contains: opts.q } },
-      { company: { contains: opts.q } },
-      { email: { contains: opts.q } },
-    ];
+    const t = textSearch(opts.q);
+    where.OR = [{ name: t }, { company: t }, { email: t }];
   }
   return db.contact.findMany({
     where,
@@ -86,7 +92,7 @@ export async function createContact(userId: string, input: ContactInput) {
 
 export async function updateContact(userId: string, id: string, input: Partial<ContactInput>) {
   const owned = await db.contact.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Contact not found");
+  if (!owned) throw new NotFoundError("That contact");
   const data = contactInputSchema.partial().parse(input);
   const patch: Record<string, unknown> = { ...data };
   if ("email" in data) patch.email = data.email || null;
@@ -100,7 +106,7 @@ export async function updateContact(userId: string, id: string, input: Partial<C
 export async function setContactStage(userId: string, id: string, stage: z.infer<typeof DealStage>) {
   DealStage.parse(stage);
   const owned = await db.contact.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Contact not found");
+  if (!owned) throw new NotFoundError("That contact");
   const contact = await db.contact.update({
     where: { id },
     data: { stage, isCustomer: stage === "won", lastContactedAt: new Date() },
@@ -111,7 +117,7 @@ export async function setContactStage(userId: string, id: string, stage: z.infer
 
 export async function deleteContact(userId: string, id: string) {
   const owned = await db.contact.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Contact not found");
+  if (!owned) throw new NotFoundError("That contact");
   await db.contact.delete({ where: { id } });
   await recomputeGoalsForMetric(userId, ["leads", "customers"]);
 }
@@ -123,7 +129,7 @@ export async function addInteraction(
 ) {
   InteractionType.parse(input.type);
   const owned = await db.contact.findFirst({ where: { id: contactId, userId }, select: { id: true } });
-  if (!owned) throw new Error("Contact not found");
+  if (!owned) throw new NotFoundError("That contact");
   const [interaction] = await db.$transaction([
     db.interaction.create({
       data: {
@@ -166,7 +172,8 @@ export async function listDeals(userId: string) {
 export async function createDeal(userId: string, input: DealInput) {
   const data = dealInputSchema.parse(input);
   const contact = await db.contact.findFirst({ where: { id: data.contactId, userId }, select: { id: true } });
-  if (!contact) throw new Error("Contact not found");
+  if (!contact) throw new NotFoundError("That contact");
+  await assertProjectOwned(userId, data.projectId);
   return db.deal.create({
     data: {
       userId,
@@ -186,7 +193,7 @@ export async function createDeal(userId: string, input: DealInput) {
 export async function setDealStage(userId: string, id: string, stage: z.infer<typeof DealStage>) {
   DealStage.parse(stage);
   const owned = await db.deal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Deal not found");
+  if (!owned) throw new NotFoundError("That deal");
   return db.deal.update({
     where: { id },
     data: { stage, closedAt: stage === "won" || stage === "lost" ? new Date() : null },
@@ -195,8 +202,9 @@ export async function setDealStage(userId: string, id: string, stage: z.infer<ty
 
 export async function updateDeal(userId: string, id: string, input: Partial<DealInput>) {
   const owned = await db.deal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Deal not found");
+  if (!owned) throw new NotFoundError("That deal");
   const data = dealInputSchema.partial().parse(input);
+  if ("projectId" in data) await assertProjectOwned(userId, data.projectId);
   return db.deal.update({
     where: { id },
     data: {
@@ -208,7 +216,7 @@ export async function updateDeal(userId: string, id: string, input: Partial<Deal
 
 export async function deleteDeal(userId: string, id: string) {
   const owned = await db.deal.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Deal not found");
+  if (!owned) throw new NotFoundError("That deal");
   await db.deal.delete({ where: { id } });
 }
 

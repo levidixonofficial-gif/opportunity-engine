@@ -18,6 +18,17 @@ export default async function AdminOverviewPage() {
       </div>
 
       <Card>
+        <CardHeader><CardTitle>Integrations</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap gap-2 text-sm">
+          {Object.entries(o.integrations).map(([name, on]) => (
+            <Badge key={name} tone={on ? "success" : "neutral"}>
+              {name}: {on ? "configured" : "not set"}
+            </Badge>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle>Feature flags</CardTitle></CardHeader>
         <CardContent className="divide-y text-sm">
           {o.flags.map((f) => (

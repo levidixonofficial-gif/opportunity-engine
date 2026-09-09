@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { OutreachChannel, OutreachKind, OutreachStatus } from "@/lib/validations/enums";
 import { integrations } from "@/lib/env";
+import { AppError, NotFoundError } from "@/lib/errors";
 
 export const outreachInputSchema = z.object({
   contactId: z.string().optional().nullable(),
@@ -25,7 +26,11 @@ export async function createOutreach(userId: string, input: OutreachInput) {
   const data = outreachInputSchema.parse(input);
   if (data.contactId) {
     const c = await db.contact.findFirst({ where: { id: data.contactId, userId }, select: { id: true } });
-    if (!c) throw new Error("Contact not found");
+    if (!c) throw new NotFoundError("That contact");
+  }
+  if (data.dealId) {
+    const d = await db.deal.findFirst({ where: { id: data.dealId, userId }, select: { id: true } });
+    if (!d) throw new NotFoundError("That deal");
   }
   return db.outreachMessage.create({
     data: {
@@ -43,7 +48,7 @@ export async function createOutreach(userId: string, input: OutreachInput) {
 
 export async function updateOutreach(userId: string, id: string, input: Partial<OutreachInput>) {
   const owned = await db.outreachMessage.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Message not found");
+  if (!owned) throw new NotFoundError("That message");
   const data = outreachInputSchema.partial().parse(input);
   return db.outreachMessage.update({ where: { id }, data });
 }
@@ -64,10 +69,10 @@ export async function setOutreachStatus(
 ) {
   OutreachStatus.parse(status);
   const owned = await db.outreachMessage.findFirst({ where: { id, userId } });
-  if (!owned) throw new Error("Message not found");
+  if (!owned) throw new NotFoundError("That message");
 
   if (status === "delivered" && !integrations.resend) {
-    throw new Error("Automatic delivery tracking needs an email integration. Log it as 'sent' manually instead.");
+    throw new AppError("Automatic delivery tracking needs an email integration. Log it as \"sent\" manually instead.");
   }
 
   return db.outreachMessage.update({
@@ -82,6 +87,6 @@ export async function setOutreachStatus(
 
 export async function deleteOutreach(userId: string, id: string) {
   const owned = await db.outreachMessage.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Message not found");
+  if (!owned) throw new NotFoundError("That message");
   await db.outreachMessage.delete({ where: { id } });
 }

@@ -3,10 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { generatePlanAction, selectOpportunityAction } from "../actions";
 
 export function PlanActions({ opportunityId, hasPlan }: { opportunityId: string; hasPlan: boolean }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
@@ -16,7 +18,11 @@ export function PlanActions({ opportunityId, hasPlan }: { opportunityId: string;
         disabled={pending}
         onClick={() =>
           start(async () => {
-            await generatePlanAction(opportunityId);
+            const res = await generatePlanAction(opportunityId);
+            if (res.error) {
+              toast({ tone: res.limited ? "info" : "error", title: res.error });
+              return;
+            }
             router.push("/plan");
           })
         }
@@ -28,8 +34,12 @@ export function PlanActions({ opportunityId, hasPlan }: { opportunityId: string;
         disabled={pending}
         onClick={() =>
           start(async () => {
-            await selectOpportunityAction(opportunityId);
-            setNote("Pinned to your dashboard as your current opportunity.");
+            try {
+              await selectOpportunityAction(opportunityId);
+              setNote("Pinned to your dashboard as your current opportunity.");
+            } catch {
+              toast({ tone: "error", title: "Could not set your focus. Try again." });
+            }
           })
         }
       >

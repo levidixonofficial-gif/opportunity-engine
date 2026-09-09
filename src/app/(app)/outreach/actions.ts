@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
+import { captureException } from "@/lib/observability";
+import { AppError, toUserMessage } from "@/lib/errors";
 import type { FormState } from "@/lib/form";
 import { OutreachChannel, OutreachKind, OutreachStatus } from "@/lib/validations/enums";
 import {
@@ -50,9 +52,10 @@ export async function updateOutreachAction(id: string, formData: FormData): Prom
 export async function setOutreachStatusAction(id: string, status: z.infer<typeof OutreachStatus>) {
   const user = await requireUser();
   try {
-    await setOutreachStatus(user.id, id, status);
+    await setOutreachStatus(user.id, z.string().min(1).parse(id), status);
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Could not update" };
+    if (!(e instanceof AppError)) captureException(e, { where: "setOutreachStatusAction" });
+    return { error: toUserMessage(e, "Could not update the message.") };
   }
   revalidatePath("/outreach");
   return { ok: true };
@@ -74,17 +77,17 @@ export interface DraftResult {
 }
 
 /** Generate an outreach draft (AI if configured, else rule-based). */
-export async function generateOutreachDraftAction(input: string, contactId?: string): Promise<DraftResult> {
+export async function generateOutreachDraftAction(input: string): Promise<DraftResult> {
   const user = await requireUser();
-  const prompt = z.string().trim().min(1).max(2000).parse(input);
+  const parsed = z.string().trim().min(1).max(2000).safeParse(input);
+  if (!parsed.success) return { error: "Add a short brief first." };
   try {
-    const res = await runAndSaveGenerator(user.id, "outreach", prompt);
+    const res = await runAndSaveGenerator(user.id, "outreach", parsed.data);
     const data = res.data as {
       subjectLines: string[];
       message: string;
       followUps: { afterDays: number; message: string }[];
     };
-    void contactId;
     return {
       subjectLines: data.subjectLines,
       message: data.message,
@@ -93,6 +96,7 @@ export async function generateOutreachDraftAction(input: string, contactId?: str
       disclaimer: res.disclaimer,
     };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Could not generate a draft." };
+    if (!(e instanceof AppError)) captureException(e, { where: "generateOutreachDraftAction" });
+    return { error: toUserMessage(e, "Could not generate a draft.") };
   }
 }

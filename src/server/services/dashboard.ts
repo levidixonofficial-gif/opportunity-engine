@@ -23,8 +23,9 @@ export async function getDashboardData(userId: string) {
     db.task.count({ where: { userId, status: "done" } }),
     db.task.count({ where: { userId } }),
     db.project.count({ where: { userId, status: "active" } }),
-    db.transaction.aggregate({ where: { userId, type: "revenue" }, _sum: { amountCents: true } }),
-    db.transaction.aggregate({ where: { userId, type: "expense" }, _sum: { amountCents: true } }),
+    // "Logged" = actual money only; projections are excluded here and on /money + /goals.
+    db.transaction.aggregate({ where: { userId, type: "revenue", isEstimated: false }, _sum: { amountCents: true } }),
+    db.transaction.aggregate({ where: { userId, type: "expense", isEstimated: false }, _sum: { amountCents: true } }),
     db.deal.count({ where: { userId, stage: { notIn: ["won", "lost"] } } }),
     db.goal.findMany({ where: { userId, status: "active" }, include: { milestones: true }, take: 3 }),
     db.savedOpportunity.findFirst({

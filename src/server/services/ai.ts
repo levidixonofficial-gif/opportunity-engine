@@ -4,8 +4,10 @@ import { chat, aiMode, AiNotConfiguredError, type ChatMessage } from "@/lib/ai";
 import { assistantSystemPrompt } from "@/lib/ai/prompts";
 import { runGenerator, type GeneratorContext, type GeneratorKindT } from "@/lib/ai/generators";
 import { GeneratorKind } from "@/lib/validations/enums";
-import { assertWithinLimit, recordUsage } from "@/lib/usage";
+import { consumeUsage } from "@/lib/usage";
 import { rateLimit, RL } from "@/lib/ratelimit";
+import { RateLimitError } from "@/lib/errors";
+import { captureException } from "@/lib/observability";
 import { getScorerProfile } from "@/server/services/profile";
 import { recommendationsFor } from "@/server/services/opportunities";
 import { GOAL_LABELS } from "@/lib/validations/enums";
@@ -96,10 +98,8 @@ export async function sendAssistantMessage(
   const rl = await rateLimit("ai", userId, RL.ai);
   if (!rl.success) throw new RateLimitError();
 
-  const limit = await assertWithinLimit(userId, "ai_message");
-  if (!limit.allowed) {
-    throw new AiLimitError(limit.limit ?? 0);
-  }
+  // Atomically consume 1 message from the monthly allowance (refunded on failure).
+  const usage = await consumeUsage(userId, "ai_message");
 
   let conversation = input.conversationId
     ? await db.aiConversation.findFirst({ where: { id: input.conversationId, userId } })
@@ -138,8 +138,14 @@ export async function sendAssistantMessage(
       tokensIn = res.tokensIn;
       tokensOut = res.tokensOut;
     } catch (err) {
-      if (err instanceof AiNotConfiguredError) reply = ruleBasedAnswer(message, ctx.text);
-      else throw err;
+      if (err instanceof AiNotConfiguredError) {
+        reply = ruleBasedAnswer(message, ctx.text);
+      } else {
+        // Provider error — refund the message and surface a generic failure.
+        await usage.release(false);
+        captureException(err, { where: "sendAssistantMessage" });
+        throw new Error("The AI provider is having trouble right now. Try again shortly.");
+      }
     }
   } else {
     reply = ruleBasedAnswer(message, ctx.text);
@@ -149,7 +155,7 @@ export async function sendAssistantMessage(
     data: { conversationId: conversation.id, role: "assistant", content: reply, model, tokensIn, tokensOut },
   });
   await db.aiConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
-  await recordUsage(userId, "ai_message");
+  await usage.release(true);
 
   return { conversationId: conversation.id, reply, mode: aiMode() };
 }
@@ -177,18 +183,17 @@ export async function runAndSaveGenerator(
   opts: { opportunityId?: string; projectId?: string } = {},
 ) {
   GeneratorKind.parse(kind);
-  const cleanInput = z.string().trim().max(2000).parse(inputText);
+  const cleanInput = z.string().trim().min(1).max(2000).parse(inputText);
 
   const rl = await rateLimit("generator", userId, RL.generator);
   if (!rl.success) throw new RateLimitError();
 
-  const limit = await assertWithinLimit(userId, "generator_run");
-  if (!limit.allowed) throw new AiLimitError(limit.limit ?? 0);
+  const usage = await consumeUsage(userId, "generator_run");
 
   const ctx = await buildContext(userId);
   if (opts.opportunityId) {
-    const opp = await db.opportunity.findUnique({
-      where: { id: opts.opportunityId },
+    const opp = await db.opportunity.findFirst({
+      where: { id: opts.opportunityId, status: "published" },
       include: { category: true },
     });
     if (opp) {
@@ -204,7 +209,14 @@ export async function runAndSaveGenerator(
     }
   }
 
-  const result = await runGenerator(kind, cleanInput, ctx.generator);
+  let result;
+  try {
+    result = await runGenerator(kind, cleanInput, ctx.generator);
+  } catch (err) {
+    await usage.release(false);
+    captureException(err, { where: "runAndSaveGenerator", kind });
+    throw new Error("The generator hit an error. Try again shortly.");
+  }
 
   const saved = await db.generatorOutput.create({
     data: {
@@ -218,12 +230,7 @@ export async function runAndSaveGenerator(
       outputJson: JSON.stringify(result.data),
     },
   });
-  await recordUsage(userId, "generator_run");
-  if (result.tokensIn) {
-    await db.aiConversation
-      .create({ data: { userId, kind, title: `${kind} generator` } })
-      .catch(() => null);
-  }
+  await usage.release(true);
 
   return { id: saved.id, ...result };
 }
@@ -236,16 +243,4 @@ export async function listGeneratorOutputs(userId: string, kind?: GeneratorKindT
   });
 }
 
-export class AiLimitError extends Error {
-  constructor(public limit: number) {
-    super(`You've used your AI allowance for this month (${limit}). Upgrade for more.`);
-    this.name = "AiLimitError";
-  }
-}
-
-export class RateLimitError extends Error {
-  constructor() {
-    super("You're going a bit fast — wait a minute and try again.");
-    this.name = "RateLimitError";
-  }
-}
+// Error types are centralized in @/lib/errors (RateLimitError, LimitReachedError).

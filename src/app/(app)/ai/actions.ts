@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
-import { sendAssistantMessage, runAndSaveGenerator, AiLimitError, RateLimitError } from "@/server/services/ai";
-import { AiNotConfiguredError } from "@/lib/ai";
+import { captureException } from "@/lib/observability";
+import { AppError, LimitReachedError, toUserMessage } from "@/lib/errors";
+import { sendAssistantMessage, runAndSaveGenerator } from "@/server/services/ai";
 import { GeneratorKind } from "@/lib/validations/enums";
 import type { GeneratorKindT } from "@/lib/ai/generators";
 
@@ -28,10 +29,8 @@ export async function sendMessageAction(
     revalidatePath("/ai");
     return res;
   } catch (e) {
-    if (e instanceof AiLimitError) return { error: e.message, limited: true };
-    if (e instanceof RateLimitError) return { error: e.message };
-    if (e instanceof AiNotConfiguredError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Something went wrong." };
+    if (!(e instanceof AppError)) captureException(e, { where: "sendMessageAction" });
+    return { error: toUserMessage(e), limited: e instanceof LimitReachedError };
   }
 }
 
@@ -55,10 +54,11 @@ export async function runGeneratorAction(
   if (!parsedKind.success) return { error: "Unknown generator." };
   const text = z.string().trim().min(1).max(2000).safeParse(input);
   if (!text.success) return { error: "Add a short brief first." };
+  const oppId = opportunityId ? z.string().min(1).max(40).safeParse(opportunityId) : null;
 
   try {
     const res = await runAndSaveGenerator(user.id, parsedKind.data as GeneratorKindT, text.data, {
-      opportunityId,
+      opportunityId: oppId?.success ? oppId.data : undefined,
     });
     await track(user.id, "generator_run", { kind: parsedKind.data, provider: res.provider });
     revalidatePath("/ai");
@@ -70,8 +70,7 @@ export async function runGeneratorAction(
       disclaimer: res.disclaimer,
     };
   } catch (e) {
-    if (e instanceof AiLimitError) return { error: e.message, limited: true };
-    if (e instanceof RateLimitError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Generation failed." };
+    if (!(e instanceof AppError)) captureException(e, { where: "runGeneratorAction" });
+    return { error: toUserMessage(e, "Generation failed. Try again shortly."), limited: e instanceof LimitReachedError };
   }
 }

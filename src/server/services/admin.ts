@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { FeatureFlagState, OpportunityStatus, UserRole } from "@/lib/validations/enums";
+import { textSearch } from "@/lib/db-helpers";
+import { AppError, NotFoundError } from "@/lib/errors";
+import { integrations } from "@/lib/env";
 import { writeAudit } from "@/lib/audit";
 
 /**
@@ -18,11 +21,13 @@ export async function adminOverview() {
     db.feedback.count({ where: { status: "new" } }),
     db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 15, include: { actor: { select: { email: true } } } }),
   ]);
-  return { users, admins, opps, published, flags, feedbackNew, recentAudit };
+  return { users, admins, opps, published, flags, feedbackNew, recentAudit, integrations };
 }
 
 export async function setFeatureFlag(actorId: string, key: string, state: string) {
   FeatureFlagState.parse(state);
+  const exists = await db.featureFlag.findUnique({ where: { key }, select: { id: true } });
+  if (!exists) throw new NotFoundError("That feature flag");
   const flag = await db.featureFlag.update({ where: { key }, data: { state } });
   await writeAudit({ actorId, action: "admin.flag.set", targetType: "feature_flag", targetId: key, meta: { state } });
   return flag;
@@ -65,6 +70,12 @@ export async function upsertOpportunity(
   id?: string,
 ) {
   const data = adminOpportunitySchema.parse(input);
+  const category = await db.opportunityCategory.findUnique({ where: { id: data.categoryId }, select: { id: true } });
+  if (!category) throw new AppError("Pick a valid category.");
+  if (id) {
+    const exists = await db.opportunity.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundError("That opportunity");
+  }
   const opp = id
     ? await db.opportunity.update({ where: { id }, data })
     : await db.opportunity.create({ data });
@@ -80,8 +91,10 @@ export async function upsertOpportunity(
 export async function setUserRole(actorId: string, userId: string, role: string) {
   UserRole.parse(role);
   if (actorId === userId && role !== "admin") {
-    throw new Error("You can't remove your own admin role.");
+    throw new AppError("You can't remove your own admin role.");
   }
+  const target = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!target) throw new NotFoundError("That user");
   const user = await db.user.update({ where: { id: userId }, data: { role } });
   await writeAudit({ actorId, action: "admin.user.role", targetType: "user", targetId: userId, meta: { role } });
   return user;
@@ -89,7 +102,7 @@ export async function setUserRole(actorId: string, userId: string, role: string)
 
 export async function listAdminUsers(q?: string) {
   return db.user.findMany({
-    where: q ? { email: { contains: q } } : undefined,
+    where: q ? { email: textSearch(q.slice(0, 100)) } : undefined,
     orderBy: { createdAt: "desc" },
     take: 50,
     include: { subscription: { select: { plan: true } } },

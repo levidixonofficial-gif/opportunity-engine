@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { rateLimit, RL } from "@/lib/ratelimit";
 import { semanticOpportunitySearch } from "@/server/services/opportunities";
 
 export interface NaturalSearchHit {
@@ -24,6 +25,11 @@ export async function naturalSearchAction(query: string): Promise<NaturalSearchR
   const user = await requireUser();
   const q = z.string().trim().min(3).max(300).safeParse(query);
   if (!q.success) return { mode: "keyword", query, hits: [], error: "Ask a fuller question (3+ characters)." };
+
+  const rl = await rateLimit("search", user.id, RL.mutation);
+  if (!rl.success) {
+    return { mode: "keyword", query, hits: [], error: "Slow down a moment, then try again." };
+  }
 
   const res = await semanticOpportunitySearch(user.id, q.data);
   return {

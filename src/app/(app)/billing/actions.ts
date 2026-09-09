@@ -6,6 +6,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { integrations } from "@/lib/env";
 import { track } from "@/lib/analytics";
+import { captureException } from "@/lib/observability";
+import { AppError, toUserMessage } from "@/lib/errors";
 import { SubscriptionPlan } from "@/lib/validations/enums";
 import { createUpgradeCheckout, createBillingPortal, devSetPlan } from "@/server/services/checkout";
 
@@ -23,11 +25,22 @@ export async function openBillingPortalAction() {
   redirect(url);
 }
 
-/** Dev-only plan switch for testing entitlements. No-ops in production / with Stripe. */
-export async function devSetPlanAction(plan: string) {
-  if (integrations.stripe) return { error: "Stripe is configured — use real checkout." };
+/**
+ * DEV-ONLY plan switch for testing entitlements. Triple-gated: this action, the
+ * service (devSetPlan), and the UI all refuse when NODE_ENV=production or Stripe
+ * is configured.
+ */
+export async function devSetPlanAction(plan: string): Promise<{ ok?: boolean; error?: string }> {
+  if (process.env.NODE_ENV === "production" || integrations.stripe) {
+    return { error: "Not available. Use real checkout." };
+  }
   const user = await requireUser();
-  await devSetPlan(user.id, SubscriptionPlan.parse(plan));
+  try {
+    await devSetPlan(user.id, SubscriptionPlan.parse(plan));
+  } catch (e) {
+    if (!(e instanceof AppError)) captureException(e, { where: "devSetPlanAction" });
+    return { error: toUserMessage(e, "Could not switch plan.") };
+  }
   revalidatePath("/billing");
   revalidatePath("/", "layout");
   return { ok: true };

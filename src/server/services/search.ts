@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { textSearch } from "@/lib/db-helpers";
 
 export interface SearchHit {
   type: "opportunity" | "project" | "task" | "contact" | "deal" | "help";
@@ -28,9 +29,9 @@ const HELP_DOCS: { title: string; body: string; href: string }[] = [
  * case-insensitive mode later.
  */
 export async function globalSearch(userId: string, rawQuery: string): Promise<SearchResults> {
-  const q = rawQuery.trim();
+  const q = rawQuery.trim().slice(0, 100);
   if (q.length < 2) return { query: q, groups: [], total: 0 };
-  const like = { contains: q };
+  const like = textSearch(q);
 
   const [opportunities, projects, tasks, contacts, deals] = await Promise.all([
     db.opportunity.findMany({

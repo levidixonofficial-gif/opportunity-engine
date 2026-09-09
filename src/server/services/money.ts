@@ -1,7 +1,21 @@
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { TransactionType, InvoiceStatus } from "@/lib/validations/enums";
+import { NotFoundError } from "@/lib/errors";
 import { recomputeGoalsForMetric } from "@/server/services/goals";
+
+async function assertOwned(
+  userId: string,
+  model: "project" | "contact",
+  id: string | null | undefined,
+) {
+  if (!id) return;
+  const row =
+    model === "project"
+      ? await db.project.findFirst({ where: { id, userId }, select: { id: true } })
+      : await db.contact.findFirst({ where: { id, userId }, select: { id: true } });
+  if (!row) throw new NotFoundError(model === "project" ? "That project" : "That contact");
+}
 
 export const transactionInputSchema = z.object({
   type: TransactionType,
@@ -32,14 +46,8 @@ export async function listTransactions(userId: string, opts: { type?: string; li
 
 export async function createTransaction(userId: string, input: TransactionInput) {
   const data = transactionInputSchema.parse(input);
-  if (data.projectId) {
-    const p = await db.project.findFirst({ where: { id: data.projectId, userId }, select: { id: true } });
-    if (!p) throw new Error("Project not found");
-  }
-  if (data.contactId) {
-    const c = await db.contact.findFirst({ where: { id: data.contactId, userId }, select: { id: true } });
-    if (!c) throw new Error("Contact not found");
-  }
+  await assertOwned(userId, "project", data.projectId);
+  await assertOwned(userId, "contact", data.contactId);
   const tx = await db.transaction.create({
     data: {
       userId,
@@ -62,19 +70,23 @@ export async function createTransaction(userId: string, input: TransactionInput)
 
 export async function deleteTransaction(userId: string, id: string) {
   const owned = await db.transaction.findFirst({ where: { id, userId }, select: { id: true } });
-  if (!owned) throw new Error("Transaction not found");
+  if (!owned) throw new NotFoundError("That entry");
   await db.transaction.delete({ where: { id } });
   await recomputeGoalsForMetric(userId, ["revenue", "profit"]);
 }
 
 export async function moneySummary(userId: string) {
+  // Bound the per-row scan to the last ~13 months (the chart only shows recent months).
+  const chartSince = new Date();
+  chartSince.setUTCMonth(chartSince.getUTCMonth() - 13);
+
   const [revActual, revEst, expActual, expEst, byMonth, byProject] = await Promise.all([
     db.transaction.aggregate({ where: { userId, type: "revenue", isEstimated: false }, _sum: { amountCents: true } }),
     db.transaction.aggregate({ where: { userId, type: "revenue", isEstimated: true }, _sum: { amountCents: true } }),
     db.transaction.aggregate({ where: { userId, type: "expense", isEstimated: false }, _sum: { amountCents: true } }),
     db.transaction.aggregate({ where: { userId, type: "expense", isEstimated: true }, _sum: { amountCents: true } }),
     db.transaction.findMany({
-      where: { userId },
+      where: { userId, isEstimated: false, occurredOn: { gte: chartSince } },
       select: { type: true, amountCents: true, occurredOn: true, isEstimated: true },
       orderBy: { occurredOn: "asc" },
     }),
@@ -135,6 +147,8 @@ export async function listInvoices(userId: string) {
 
 export async function createInvoice(userId: string, input: InvoiceInput) {
   const data = invoiceInputSchema.parse(input);
+  await assertOwned(userId, "project", data.projectId);
+  await assertOwned(userId, "contact", data.contactId);
   return db.invoice.create({
     data: {
       userId,
@@ -151,29 +165,39 @@ export async function createInvoice(userId: string, input: InvoiceInput) {
   });
 }
 
-/** Marking an invoice paid creates a matching actual revenue transaction. */
+/**
+ * Marking an invoice paid creates ONE matching actual revenue transaction.
+ * Idempotent + race-safe: the status flip is a conditional updateMany, so only
+ * the first caller (of any number of concurrent ones) creates the transaction.
+ */
 export async function markInvoicePaid(userId: string, id: string) {
   const invoice = await db.invoice.findFirst({ where: { id, userId } });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) throw new NotFoundError("That invoice");
   if (invoice.status === "paid") return invoice;
 
-  await db.$transaction([
-    db.invoice.update({ where: { id }, data: { status: "paid", paidOn: new Date() } }),
-    db.transaction.create({
-      data: {
-        userId,
-        type: "revenue",
-        amountCents: invoice.amountCents,
-        currency: invoice.currency,
-        category: "invoice",
-        note: `Invoice ${invoice.number}`,
-        occurredOn: new Date(),
-        projectId: invoice.projectId,
-        contactId: invoice.contactId,
-        invoiceId: invoice.id,
-      },
-    }),
-  ]);
+  const flipped = await db.invoice.updateMany({
+    where: { id, userId, status: { not: "paid" } },
+    data: { status: "paid", paidOn: new Date() },
+  });
+  if (flipped.count === 0) {
+    // Someone else won the race — do not double-book revenue.
+    return db.invoice.findUnique({ where: { id } });
+  }
+
+  await db.transaction.create({
+    data: {
+      userId,
+      type: "revenue",
+      amountCents: invoice.amountCents,
+      currency: invoice.currency,
+      category: "invoice",
+      note: `Invoice ${invoice.number}`,
+      occurredOn: new Date(),
+      projectId: invoice.projectId,
+      contactId: invoice.contactId,
+      invoiceId: invoice.id,
+    },
+  });
   await recomputeGoalsForMetric(userId, ["revenue", "profit"]);
   return db.invoice.findUnique({ where: { id } });
 }

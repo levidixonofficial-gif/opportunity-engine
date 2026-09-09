@@ -33,7 +33,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Revenue logged" value={formatCurrency(progress.revenueCents)} />
-        <Stat label="Estimated profit" value={formatCurrency(progress.profitCents)} />
+        <Stat label="Profit (actual)" value={formatCurrency(progress.profitCents)} />
         <Stat label="Tasks done" value={`${progress.completedTasks}/${progress.totalTasks || 0}`} />
         <Stat label="Open leads" value={String(progress.leadCount)} />
       </div>

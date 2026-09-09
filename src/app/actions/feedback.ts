@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
+import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({ message: z.string().trim().min(5).max(4000), path: z.string().max(300).optional() });
 
@@ -18,6 +19,10 @@ export async function submitFeedback(formData: FormData): Promise<{ ok: true } |
 
   const user = await getAuthUser();
   const hdrs = await headers();
+
+  const rlKey = user?.id ?? hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anon";
+  const rl = await rateLimit("feedback", rlKey, { limit: 5, windowMs: 10 * 60_000 });
+  if (!rl.success) return { ok: false, error: "You've sent a few messages already — try again later." };
 
   await db.feedback.create({
     data: {
