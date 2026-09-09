@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
@@ -21,6 +21,8 @@ interface DialogProps {
 export function Dialog({ open, onClose, title, description, children, footer, className }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const descId = useId();
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -79,7 +81,8 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="dialog-title"
+            aria-labelledby={titleId}
+            aria-describedby={description ? descId : undefined}
             tabIndex={-1}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -92,12 +95,16 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 id="dialog-title" className="text-base font-semibold">
+                <h2 id={titleId} className="text-base font-semibold">
                   {title}
                 </h2>
-                {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+                {description && (
+                  <p id={descId} className="mt-1 text-sm text-muted">
+                    {description}
+                  </p>
+                )}
               </div>
-              <button onClick={onClose} className="rounded p-1 text-muted hover:text-foreground" aria-label="Close">
+              <button onClick={onClose} className="rounded p-1 text-muted hover:text-foreground" aria-label="Close dialog">
                 <X className="size-4" />
               </button>
             </div>

@@ -106,10 +106,10 @@ export default async function LeadsPage({
                 <table className="w-full text-sm">
                   <thead className="border-b text-left text-xs text-muted">
                     <tr>
-                      <th className="px-4 py-2 font-medium">Name</th>
-                      <th className="px-4 py-2 font-medium">Company</th>
-                      <th className="px-4 py-2 font-medium">Stage</th>
-                      <th className="px-4 py-2 font-medium">Next follow-up</th>
+                      <th scope="col" className="px-4 py-2 font-medium">Name</th>
+                      <th scope="col" className="px-4 py-2 font-medium">Company</th>
+                      <th scope="col" className="px-4 py-2 font-medium">Stage</th>
+                      <th scope="col" className="px-4 py-2 font-medium">Next follow-up</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">

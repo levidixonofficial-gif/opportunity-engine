@@ -4,7 +4,7 @@ import { aiMode } from "@/lib/ai";
 import { getUserPlan } from "@/server/services/billing";
 import { entitlementsFor } from "@/lib/entitlements";
 import { assertWithinLimit } from "@/lib/usage";
-import { listConversations } from "@/server/services/ai";
+import { getLatestConversation } from "@/server/services/ai";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/misc";
@@ -16,14 +16,13 @@ export default async function AiPage({ searchParams }: { searchParams: Promise<{
   const user = await requireUser();
   const tab = (await searchParams).tab === "generators" ? "generators" : "assistant";
 
-  const [plan, conversations, msgLimit, genLimit] = await Promise.all([
+  const [plan, latest, msgLimit, genLimit] = await Promise.all([
     getUserPlan(user.id),
-    listConversations(user.id),
+    getLatestConversation(user.id, "assistant"),
     assertWithinLimit(user.id, "ai_message"),
     assertWithinLimit(user.id, "generator_run"),
   ]);
   const ent = entitlementsFor(plan);
-  const latest = conversations.find((c) => c.kind === "assistant");
   const mode = aiMode();
 
   return (

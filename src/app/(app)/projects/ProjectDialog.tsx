@@ -36,7 +36,7 @@ export function NewProjectButton({
             <TextField label="Revenue target ($)" name="revenueTarget" type="text" inputMode="decimal" placeholder="1000" />
           </div>
           <TextField label="Deadline" name="deadline" type="date" />
-          {state?.error && <p className="text-sm text-danger">{state.error}</p>}
+          {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
               Cancel

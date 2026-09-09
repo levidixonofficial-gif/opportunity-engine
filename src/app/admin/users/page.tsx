@@ -27,10 +27,10 @@ export default async function AdminUsersPage({
         <table className="w-full text-sm">
           <thead className="border-b text-left text-xs text-muted">
             <tr>
-              <th className="px-4 py-2 font-medium">Email</th>
-              <th className="px-4 py-2 font-medium">Plan</th>
-              <th className="px-4 py-2 font-medium">Joined</th>
-              <th className="px-4 py-2 font-medium">Role</th>
+              <th scope="col" className="px-4 py-2 font-medium">Email</th>
+              <th scope="col" className="px-4 py-2 font-medium">Plan</th>
+              <th scope="col" className="px-4 py-2 font-medium">Joined</th>
+              <th scope="col" className="px-4 py-2 font-medium">Role</th>
             </tr>
           </thead>
           <tbody className="divide-y">

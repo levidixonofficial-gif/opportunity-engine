@@ -21,10 +21,10 @@ export default async function AdminOpportunitiesPage() {
           <table className="w-full text-sm">
             <thead className="border-b text-left text-xs text-muted">
               <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Category</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Saves</th>
+                <th scope="col" className="px-4 py-2 font-medium">Name</th>
+                <th scope="col" className="px-4 py-2 font-medium">Category</th>
+                <th scope="col" className="px-4 py-2 font-medium">Status</th>
+                <th scope="col" className="px-4 py-2 font-medium">Saves</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>

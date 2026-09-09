@@ -101,7 +101,7 @@ export function OpportunityForm({
       <TextAreaField label="Risk considerations" name="riskNotes" rows={2} required defaultValue={o?.riskNotes} />
       <TextAreaField label="Factors that influence profitability" name="profitFactors" rows={2} required defaultValue={o?.profitFactors} />
 
-      {state.error && <p className="text-sm text-danger">{state.error}</p>}
+      {state.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={() => router.push("/admin/opportunities")}>
           Cancel

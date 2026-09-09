@@ -68,11 +68,22 @@ async function buildContext(userId: string): Promise<{ text: string; generator: 
 
 // --- Assistant -----------------------------------------------------------
 
+/** Fetch only the most recent conversation of a kind (with its messages). */
+export async function getLatestConversation(userId: string, kind = "assistant") {
+  return db.aiConversation.findFirst({
+    where: { userId, kind },
+    orderBy: { updatedAt: "desc" },
+    include: { messages: { orderBy: { createdAt: "asc" }, take: 100 } },
+  });
+}
+
+/** Conversation list WITHOUT message bodies (for a future history sidebar). */
 export async function listConversations(userId: string) {
   return db.aiConversation.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
-    include: { messages: { orderBy: { createdAt: "asc" } } },
+    take: 50,
+    select: { id: true, title: true, kind: true, updatedAt: true, _count: { select: { messages: true } } },
   });
 }
 

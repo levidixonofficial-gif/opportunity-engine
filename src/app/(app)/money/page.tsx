@@ -13,16 +13,15 @@ export const metadata = { title: "Money" };
 
 export default async function MoneyPage() {
   const user = await requireUser();
-  const [summary, transactions, invoices, projects, contacts, projectNames] = await Promise.all([
+  const [summary, transactions, invoices, projects, contacts] = await Promise.all([
     moneySummary(user.id),
     listTransactions(user.id, { limit: 60 }),
     listInvoices(user.id),
     db.project.findMany({ where: { userId: user.id }, select: { id: true, name: true } }),
     db.contact.findMany({ where: { userId: user.id }, select: { id: true, name: true } }),
-    db.project.findMany({ where: { userId: user.id }, select: { id: true, name: true } }),
   ]);
 
-  const projMap = new Map(projectNames.map((p) => [p.id, p.name]));
+  const projMap = new Map(projects.map((p) => [p.id, p.name]));
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -80,11 +79,11 @@ export default async function MoneyPage() {
             <table className="w-full text-sm">
               <thead className="border-b text-left text-xs text-muted">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Date</th>
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium">Amount</th>
-                  <th className="px-4 py-2 font-medium">Category</th>
-                  <th className="px-4 py-2 font-medium">Linked</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Date</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Type</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Amount</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Category</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Linked</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
@@ -119,10 +118,10 @@ export default async function MoneyPage() {
             <table className="w-full text-sm">
               <thead className="border-b text-left text-xs text-muted">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Number</th>
-                  <th className="px-4 py-2 font-medium">Client</th>
-                  <th className="px-4 py-2 font-medium">Amount</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Number</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Client</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Amount</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Status</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>

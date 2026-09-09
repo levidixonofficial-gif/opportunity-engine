@@ -87,10 +87,13 @@ export function OnboardingFlow({ skills, interests }: { skills: CatalogItem[]; i
                       <button
                         type="button"
                         key={opt.value}
+                        aria-pressed={selected}
                         onClick={() => setChoices((c) => ({ ...c, [currentChoice.id]: opt.value }))}
                         className={cn(
                           "flex w-full flex-col rounded-md border p-3 text-left transition-colors",
-                          selected ? "border-accent bg-accent/5" : "hover:bg-surface-2",
+                          selected
+                            ? "border-accent bg-accent-subtle ring-1 ring-accent"
+                            : "hover:bg-surface-2",
                         )}
                       >
                         <span className="text-sm font-medium">{opt.label}</span>
@@ -149,7 +152,7 @@ export function OnboardingFlow({ skills, interests }: { skills: CatalogItem[]; i
           </motion.div>
         </AnimatePresence>
 
-        {state.error && <p className="mt-4 text-sm text-danger">{state.error}</p>}
+        {state.error && <p className="mt-4 text-sm text-danger" role="alert">{state.error}</p>}
 
         <div className="mt-8 flex items-center justify-between">
           <Button

@@ -62,7 +62,7 @@ export function ActionDialog({
       <Dialog open={open} onClose={() => setOpen(false)} title={title} description={description} className={className}>
         <form action={submit} className="space-y-3">
           {children}
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger" role="alert">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
