@@ -66,6 +66,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear transient search state when the dialog closes
       setQ("");
       setResults(null);
       return;
