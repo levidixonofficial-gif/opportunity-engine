@@ -13,7 +13,8 @@ export const taskInputSchema = z.object({
   planId: z.string().optional().nullable(),
   contactId: z.string().optional().nullable(),
 });
-export type TaskInput = z.infer<typeof taskInputSchema>;
+/** Accepts the pre-parse shape (fields with schema defaults are optional). */
+export type TaskInput = z.input<typeof taskInputSchema>;
 
 async function assertOwnedTask(userId: string, id: string) {
   const t = await db.task.findFirst({ where: { id, userId } });

@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 
-/** Order matters: children before parents (FK). */
+/** Order matters: children before parents (SQLite FK enforcement is ON via Prisma). */
 const TABLES = [
+  "WebhookEvent",
   "AuditLog",
   "Feedback",
   "GeneratorOutput",
@@ -17,7 +18,14 @@ const TABLES = [
   "Plan",
   "Project",
   "Goal",
+  "OpportunityStep",
+  "OpportunityTool",
+  "OpportunityExample",
+  "OpportunitySkill",
+  "OpportunityInterest",
   "SavedOpportunity",
+  "Opportunity",
+  "OpportunityCategory",
   "Contact",
   "LeadImportBatch",
   "Company",
@@ -29,7 +37,11 @@ const TABLES = [
   "ProfileSkill",
   "ProfileInterest",
   "Profile",
+  "Skill",
+  "Interest",
   "FeatureFlagOverride",
+  "FeatureFlag",
+  "KnowledgeDocument",
   "User",
 ];
 
