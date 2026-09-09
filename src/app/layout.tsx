@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster } from "@/components/ui/toast";
 import { CookieBanner } from "@/components/cookie-banner";
 import { AnalyticsProvider } from "@/components/analytics-provider";
+import { AuthProvider } from "@/components/auth-provider";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -43,14 +44,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main-content" className="skip-link no-print">
           Skip to content
         </a>
-        <ThemeProvider>
-          {children}
-          <Toaster />
-          <CookieBanner />
-          <Suspense fallback={null}>
-            <AnalyticsProvider />
-          </Suspense>
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster />
+            <CookieBanner />
+            <Suspense fallback={null}>
+              <AnalyticsProvider />
+            </Suspense>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

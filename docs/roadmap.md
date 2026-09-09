@@ -18,10 +18,12 @@ list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
 - ✅ `.github/workflows/ci.yml` (typecheck + lint + test + build)
 - ✅ `prisma/rls/policies.sql` — RLS for every user-owned table (defense-in-depth)
 - ✅ Task service extracted for testability; `getAuthUser` fast-path
-- 🔩 Clerk provider wiring + `/api/webhooks/clerk` Svix verification — abstraction
-  done, `@clerk/nextjs` installed, provider not yet mounted (docs/authentication.md)
+- 🔩 Clerk: `<AuthProvider>` conditionally mounts `<ClerkProvider>` when
+  AUTH_MODE=clerk; `resolveIdentity()` calls `auth()`. Remaining: add
+  `clerkMiddleware()` to proxy.ts, mount `<SignIn/>`, register the webhook
+  (docs/authentication.md). `/api/webhooks/clerk` still returns 501 until then.
+- ✅ Global `error.tsx` / `not-found.tsx` / `(app)/loading.tsx` skeleton
 - ⛏ Postgres preview DB + running the RLS isolation test against Postgres in CI
-- ⛏ Per-segment `error.tsx` / `loading.tsx` (global handling + skeletons exist)
 
 ## Phase 2 — Opportunity Engine depth ✅
 - ✅ Opportunity model + all 10 seeds filled: target customer, ongoing cost, geo
@@ -75,13 +77,19 @@ list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
   enforce limits; CRM/analytics show a soft notice rather than hard-blocking
 - ⛏ Live verification (needs `STRIPE_*` env + `stripe listen`)
 
-## Phase 7 — Infrastructure 🔩
+## Phase 7 — Infrastructure ✅ (interfaces) / 🔩 (live wiring)
 - ✅ `lib/email` (Resend adapter + console fallback), `lib/analytics` (PostHog
   server capture + scrubbing), `lib/audit`
-- ✅ Cookie consent gate; analytics only fire with consent + key
-- ⛏ Resend templates + cron digests; PostHog client init; Sentry
-  (`instrumentation.ts`); Upstash rate-limiting/caching; Cloudflare + Vercel cutover
-- ⛏ `postinstall: prisma generate`
+- ✅ `lib/ratelimit` — Upstash sliding-window + in-process fallback; applied to
+  AI chat, generators, lead import, dev sign-in
+- ✅ `components/analytics-provider` — PostHog client, consent-gated, pageview-only
+- ✅ `instrumentation.ts` + `lib/observability` — Sentry init guarded by DSN with
+  a `beforeSend` PII/financial scrub
+- ✅ `next.config` security headers (HSTS, nosniff, X-Frame-Options, etc.)
+- ✅ `postinstall: prisma generate`
+- ✅ `error.tsx` / `global-error.tsx` / `not-found.tsx` / `(app)/loading.tsx`
+- ⛏ Resend HTML templates + cron digests; Sentry source-map upload in CI;
+  Upstash job queue; Cloudflare + Vercel production cutover
 
 ## Global UI/UX ✅
 Theme system (pre-paint script, 3-way toggle, full token set) · Toaster ·
@@ -92,9 +100,10 @@ skip-to-content · print stylesheet · prefers-reduced-motion · PWA manifest ·
 focus-visible everywhere · form success (toast) + error states · empty states.
 
 ## Acceptance criteria (spec §55)
-auth ✅ · onboarding ✅ · persistence ✅ · RLS 🔩(SQL written, not enforced on SQLite) ·
-opportunities ✅ · search ✅(traditional + global; semantic ⛏) · recommendations ✅ ·
-plans ✅ · tasks ✅ · projects ✅ · AI ✅(local + real path) · vector ⛏ · Stripe ✅(arch) ·
-webhooks ✅ · emails 🔩(interface + fallback) · analytics 🔩(interface) · Sentry ⛏ ·
-Redis ⛏ · admin ✅ · mobile ✅ · prod deploy ⛏ · env documented ✅ · no secrets ✅ ·
-error handling 🔩 · docs ✅
+auth ✅ · onboarding ✅ · persistence ✅ · RLS 🔩(SQL written; enforced on Postgres only) ·
+opportunities ✅ · search ✅(traditional + global + natural-language) · recommendations ✅ ·
+plans ✅ · tasks ✅ · projects ✅ · AI ✅(local + real path) · vector ✅(keyword; Pinecone stub) ·
+Stripe ✅(checkout + webhook + entitlements) · webhooks ✅(Stripe live path; Clerk 501) ·
+emails ✅(interface + Resend adapter; templates ⛏) · analytics ✅(server + consent-gated client) ·
+Sentry ✅(DSN-guarded init + scrub) · Redis ✅(ratelimit + fallback) · admin ✅ · mobile ✅ ·
+prod deploy ⛏ · env documented ✅ · no secrets ✅ · error handling ✅ · docs ✅
