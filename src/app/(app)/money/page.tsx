@@ -44,7 +44,7 @@ export default async function MoneyPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Monthly (actual)</CardTitle></CardHeader>
           <CardContent>
@@ -76,7 +76,7 @@ export default async function MoneyPage() {
               <EmptyState title="No entries yet" description="Add your first revenue or expense to start tracking." />
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[32rem] text-sm">
               <thead className="border-b text-left text-xs text-muted">
                 <tr>
                   <th scope="col" className="px-4 py-2 font-medium">Date</th>
@@ -106,7 +106,7 @@ export default async function MoneyPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>
@@ -115,7 +115,7 @@ export default async function MoneyPage() {
         <Card className="mt-6">
           <CardHeader><CardTitle>Invoices</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[32rem] text-sm">
               <thead className="border-b text-left text-xs text-muted">
                 <tr>
                   <th scope="col" className="px-4 py-2 font-medium">Number</th>
@@ -142,7 +142,7 @@ export default async function MoneyPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}

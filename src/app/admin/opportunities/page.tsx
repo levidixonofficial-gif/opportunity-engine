@@ -18,7 +18,7 @@ export default async function AdminOpportunitiesPage() {
       </div>
       <Card>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[32rem] text-sm">
             <thead className="border-b text-left text-xs text-muted">
               <tr>
                 <th scope="col" className="px-4 py-2 font-medium">Name</th>
@@ -47,7 +47,7 @@ export default async function AdminOpportunitiesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
       <p className="text-xs text-muted">

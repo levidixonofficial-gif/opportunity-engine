@@ -24,7 +24,7 @@ export default async function AdminUsersPage({
             className="h-9 w-full max-w-xs rounded-md border bg-surface px-3 text-sm"
           />
         </form>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[32rem] text-sm">
           <thead className="border-b text-left text-xs text-muted">
             <tr>
               <th scope="col" className="px-4 py-2 font-medium">Email</th>
@@ -49,7 +49,7 @@ export default async function AdminUsersPage({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </CardContent>
     </Card>
   );

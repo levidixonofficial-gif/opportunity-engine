@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdmin(); // server-enforced at the layout — every /admin/* route inherits this
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8">
+    <div className="mx-auto w-full min-w-0 max-w-5xl px-5 py-8">
       <div className="mb-4 flex items-center gap-3">
         <Link href="/dashboard" className="text-sm text-muted hover:text-foreground">
           ← App

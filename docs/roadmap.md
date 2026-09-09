@@ -18,12 +18,14 @@ list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
 - ✅ `.github/workflows/ci.yml` (typecheck + lint + test + build)
 - ✅ `prisma/rls/policies.sql` — RLS for every user-owned table (defense-in-depth)
 - ✅ Task service extracted for testability; `getAuthUser` fast-path
-- 🔩 Clerk: `<AuthProvider>` conditionally mounts `<ClerkProvider>` when
-  AUTH_MODE=clerk; `resolveIdentity()` calls `auth()`. Remaining: add
-  `clerkMiddleware()` to proxy.ts, mount `<SignIn/>`, register the webhook
-  (docs/authentication.md). `/api/webhooks/clerk` still returns 501 until then.
+- ✅ Clerk (production-integration pass): `<ClerkProvider>` conditional mount,
+  `clerkMiddleware()` in proxy.ts (dev cookie gate preserved), `<SignIn/>` on
+  `/sign-in`, signature-verified idempotent `/api/webhooks/clerk`
+  (user.created/updated/deleted). Activates on `AUTH_MODE=clerk` + keys.
+  `tests/clerk-webhook.test.ts`. (docs/authentication.md)
 - ✅ Global `error.tsx` / `not-found.tsx` / `(app)/loading.tsx` skeleton
-- ⛏ Postgres preview DB + running the RLS isolation test against Postgres in CI
+- ✅ Postgres readiness in CI: schema-drift check + `verify:rls` (RLS + cross-user
+  isolation vs real Postgres 18 / PGlite). `ci.yml` `postgres` job.
 
 ## Phase 2 — Opportunity Engine depth ✅
 - ✅ Opportunity model + all 10 seeds filled: target customer, ongoing cost, geo
@@ -78,8 +80,9 @@ list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
 - ⛏ Live verification (needs `STRIPE_*` env + `stripe listen`)
 
 ## Phase 7 — Infrastructure ✅ (interfaces) / 🔩 (live wiring)
-- ✅ `lib/email` (Resend adapter + console fallback), `lib/analytics` (PostHog
-  server capture + scrubbing), `lib/audit`
+- ✅ `lib/email` (Resend adapter + console fallback + branded HTML templates;
+  `accepted` never claims delivery), `lib/analytics` (PostHog server capture +
+  scrubbing), `lib/audit`
 - ✅ `lib/ratelimit` — Upstash sliding-window + in-process fallback; applied to
   AI chat, generators, lead import, dev sign-in
 - ✅ `components/analytics-provider` — PostHog client, consent-gated, pageview-only
@@ -88,8 +91,10 @@ list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
 - ✅ `next.config` security headers (HSTS, nosniff, X-Frame-Options, etc.)
 - ✅ `postinstall: prisma generate`
 - ✅ `error.tsx` / `global-error.tsx` / `not-found.tsx` / `(app)/loading.tsx`
-- ⛏ Resend HTML templates + cron digests; Sentry source-map upload in CI;
-  Upstash job queue; Cloudflare + Vercel production cutover
+- ✅ Resend HTML templates; `vercel.json` + `vercel-build` (migrate-deploy in the
+  deploy pipeline); `docs/disaster-recovery.md`
+- ⛏ cron digests; Sentry source-map upload in CI; Upstash job queue;
+  Cloudflare + Vercel production cutover (needs provisioning)
 
 ## Global UI/UX ✅
 Theme system (pre-paint script, 3-way toggle, full token set) · Toaster ·
@@ -100,10 +105,11 @@ skip-to-content · print stylesheet · prefers-reduced-motion · PWA manifest ·
 focus-visible everywhere · form success (toast) + error states · empty states.
 
 ## Acceptance criteria (spec §55)
-auth ✅ · onboarding ✅ · persistence ✅ · RLS 🔩(SQL written; enforced on Postgres only) ·
+auth ✅ · onboarding ✅ · persistence ✅ · RLS ✅(verified vs real Postgres; apply to live DB on switch) ·
 opportunities ✅ · search ✅(traditional + global + natural-language) · recommendations ✅ ·
 plans ✅ · tasks ✅ · projects ✅ · AI ✅(local + real path) · vector ✅(keyword; Pinecone stub) ·
-Stripe ✅(checkout + webhook + entitlements) · webhooks ✅(Stripe live path; Clerk 501) ·
-emails ✅(interface + Resend adapter; templates ⛏) · analytics ✅(server + consent-gated client) ·
+Stripe ✅(checkout + webhook + entitlements) · webhooks ✅(Stripe + Clerk, signature-verified + idempotent) ·
+emails ✅(interface + Resend adapter + HTML templates) · analytics ✅(server + consent-gated client) ·
 Sentry ✅(DSN-guarded init + scrub) · Redis ✅(ratelimit + fallback) · admin ✅ · mobile ✅ ·
-prod deploy ⛏ · env documented ✅ · no secrets ✅ · error handling ✅ · docs ✅
+prod deploy ✅(vercel.json + migrate-deploy pipeline; needs provisioning) · env documented ✅ ·
+no secrets ✅ · error handling ✅ · docs ✅

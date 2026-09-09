@@ -26,7 +26,13 @@ for the exact state of every feature. What works today, end to end:
 
 Anything requiring a production credential (Clerk, Stripe, Anthropic, Pinecone,
 Resend, PostHog, Sentry, Upstash) has its integration built and degrades honestly
-without the key — it is never faked. 43 tests, CI, RLS policies included.
+without the key — it is never faked. Clerk auth (middleware + `<SignIn/>` +
+signature-verified lifecycle webhook) is wired for `AUTH_MODE=clerk`; the dev shim
+stays for local use. RLS is verified against real PostgreSQL in CI
+(`npm run verify:rls`). 106 tests, CI (verify + postgres + audit jobs).
+See [`docs/production-readiness.md`](docs/production-readiness.md) for the exact
+state of every item and [`docs/disaster-recovery.md`](docs/disaster-recovery.md)
+for rollback/restore.
 
 ## Stack
 
@@ -57,8 +63,11 @@ test account (tick "admin" for `/admin`). Complete onboarding to reach the dashb
 | `npm run lint` | ESLint |
 | `npm test` / `test:watch` / `test:coverage` | Vitest |
 | `npm run db:migrate` / `db:deploy` / `db:seed` / `db:studio` / `db:reset` | Prisma |
+| `npm run verify:rls` | RLS + cross-user isolation vs real Postgres (PGlite) |
+| `npm run pg:up` | local Postgres over the wire protocol (manual testing) |
 
 Full verification (what CI runs): `npm run typecheck && npm run lint && npm test && npm run build`
+Postgres/RLS check: `npm run verify:rls` (real PostgreSQL 18 via PGlite, no Docker).
 
 ## Layout
 

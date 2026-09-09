@@ -30,7 +30,7 @@ export default async function AnalyticsPage() {
         <Stat label="AI + generator uses" value={String(a.totals.aiMessages + a.totals.generatorRuns)} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Progress funnel</CardTitle></CardHeader>
           <CardContent className="space-y-3">

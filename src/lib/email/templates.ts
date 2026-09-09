@@ -25,13 +25,18 @@ interface Block {
   footnote?: string;
 }
 
+/** Only ever our own https/mailto links reach here, but never emit a non-safe scheme. */
+function safeHref(href: string): string {
+  return /^(https?:|mailto:)/i.test(href) ? href : "#";
+}
+
 function layout({ heading, paragraphs, cta, footnote }: Block): string {
   const appUrl = publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   const body = paragraphs
     .map((p) => `<p style="margin:0 0 16px;line-height:1.6;color:#334155">${escape(p)}</p>`)
     .join("");
   const button = cta
-    ? `<p style="margin:24px 0"><a href="${escape(cta.href)}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${escape(cta.label)}</a></p>`
+    ? `<p style="margin:24px 0"><a href="${escape(safeHref(cta.href))}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${escape(cta.label)}</a></p>`
     : "";
   const foot = footnote
     ? `<p style="margin:24px 0 0;font-size:12px;color:#94a3b8;line-height:1.5">${escape(footnote)}</p>`

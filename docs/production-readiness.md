@@ -25,14 +25,14 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 | CSV import formula-injection neutralised | ✅ | `sanitizeImportedCell()`; `tests/data-integrity.test.ts` |
 | Rate limiting on sensitive/high-cost ops | ✅ | AI chat, generators, plan gen, lead import, sign-in, feedback, search |
 | Usage-counter / entitlement bypass closed | ✅ | `consumeUsage()` increments-then-checks atomically + refunds |
-| Webhook signature verification | ⚠️ Stripe done; Clerk pending | Stripe: constant-time + idempotent (`WebhookEvent`). Clerk route returns 501 |
+| Webhook signature verification | ✅ (code) | Stripe + Clerk both: signature verified before any DB write, idempotent via `WebhookEvent(provider,eventId)`. Clerk: real `verifyWebhook`; `tests/clerk-webhook.test.ts` |
 | Security headers (HSTS, nosniff, X-Frame-Options, Referrer/Permissions-Policy) | ✅ | `next.config.ts` |
 | CSRF | ✅ | Next.js server actions are same-origin POST + action-id gated; webhooks use signatures not cookies |
 | Open redirect | ✅ | no user-controlled redirect targets; Stripe URLs built from `NEXT_PUBLIC_APP_URL` |
 | Secrets scanned out of git | ✅ | `.env.local` gitignored; `git grep` clean of key prefixes |
 | Audit log for admin + security events | ✅ | `AuditLog` + `writeAudit()` |
-| Row Level Security (defense-in-depth) | ⚠️ | `prisma/rls/policies.sql` written; enforced only on Postgres — apply after migration |
-| Dependency vulnerability scan in CI | ❌ | add `npm audit --production` (or Dependabot) to `ci.yml` |
+| Row Level Security (defense-in-depth) | ✅ (verified) / ⚠️ (apply to live DB) | `prisma/rls/policies.sql` — every user table, `using`+`with check`, `SECURITY DEFINER` helper, locked `User`/`AuditLog`/`WebhookEvent`. `npm run verify:rls` proves enforcement + cross-user isolation against real Postgres 18; runs in CI. Still must `psql -f` it onto the live Supabase DB after migration |
+| Dependency vulnerability scan in CI | ✅ | `ci.yml` `audit` job: `npm audit --omit=dev --audit-level=high` |
 | Pen test / external review | ❌ | not done |
 
 ## DATABASE
@@ -41,7 +41,7 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 |---|---|---|
 | Schema is Postgres-compatible | ✅ | no enums, scalar lists, or `@db.` types |
 | `contains` search behaves identically dev↔prod | ✅ | `lib/db-helpers.textSearch()` adds `mode:insensitive` on Postgres |
-| Migrations | ⚠️ | current migrations are SQLite-flavoured — regenerate for Postgres (`rm -rf prisma/migrations && prisma migrate dev`) per `docs/database.md` |
+| Migrations | ✅ (Postgres schema verified) / ⚠️ (regenerate on switch) | `prisma/postgres-preview.sql` is CI-checked against `schema.prisma` (no drift) and applies cleanly to real Postgres 18 via `prisma migrate deploy`. Local dev/CI stay on the SQLite migration set; the switch (`rm -rf prisma/migrations && prisma migrate dev --name init`, diff vs preview) is the documented per-deployment step |
 | Indexes for hot paths | ✅ | userId(+status/date) on every child table; `AuditLog(action)` + `(createdAt)` added; `WebhookEvent` unique |
 | Unique constraints | ✅ | `User.clerkId/email`, `Subscription.stripe*`, `SavedOpportunity(userId,opportunityId)`, `Invoice(userId,number)`, `UsageCounter(userId,feature,periodKey)`, `WebhookEvent(provider,eventId)` |
 | Foreign keys + cascade rules | ✅ | owned data `Cascade`, optional links `SetNull` (money survives contact deletion) |
@@ -57,9 +57,9 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 |---|---|---|
 | Provider abstraction (Clerk ↔ dev shim) | ✅ | one `getAuthUser()` interface |
 | `<ClerkProvider>` conditional mount | ✅ | `components/auth-provider` (passthrough in dev) |
-| `clerkMiddleware()` in `proxy.ts` | ❌ | required before `AUTH_MODE=clerk` works end-to-end |
-| `<SignIn/>` component mounted | ❌ | `/sign-in` shows the dev form; Clerk UI not wired |
-| Clerk webhook (user.created/updated/deleted) | ❌ | route returns 501; lazy provisioning in `getAuthUser()` is the interim |
+| `clerkMiddleware()` in `proxy.ts` | ✅ | runs when `AUTH_MODE=clerk`; dev cookie gate otherwise |
+| `<SignIn/>` component mounted | ✅ | `/sign-in` renders Clerk `<SignIn routing="hash"/>` in clerk mode; dev form otherwise |
+| Clerk webhook (user.created/updated/deleted) | ✅ (code) | real `verifyWebhook`, idempotent, mirrors Clerk-owned fields only; `tests/clerk-webhook.test.ts` (10). Needs `CLERK_WEBHOOK_SECRET` + a Dashboard endpoint |
 | Session cookies `httpOnly` + `secure` (prod) + `sameSite` | ✅ | dev cookie; Clerk manages its own |
 | Sign-in rate limiting | ✅ | per-IP |
 
@@ -103,8 +103,8 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 | Item | Status | Notes |
 |---|---|---|
 | Interface + Resend adapter | ✅ (code) / ⚠️ (keys) | `lib/email` |
-| Console fallback never claims delivery | ✅ | returns `{ delivered: false, reason: "not-configured" }` |
-| HTML templates | ❌ | plain-text only today |
+| Console fallback never claims delivery | ✅ | returns `{ accepted: false, reason: "not-configured" }`; `accepted` = provider took the message, never means "delivered" |
+| HTML templates | ✅ | `lib/email/templates.ts` — branded inline-CSS layout, user content escaped, plain-text form always included (never HTML-only); `tests/email.test.ts` |
 | Domain auth records (SPF/DKIM/DMARC) | ⚠️ | documented in `docs/dns.md` |
 | Cron digests (weekly progress, task reminders) | ❌ | |
 | Unsubscribe / preference links | ⚠️ | `NotificationPreference` exists; link not in the template yet |
@@ -143,23 +143,23 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 
 | Item | Status | Notes |
 |---|---|---|
-| CI (typecheck + lint + test + build) | ✅ | `.github/workflows/ci.yml` |
-| `postinstall: prisma generate` | ✅ | |
+| CI (typecheck + lint + test + build) | ✅ | `.github/workflows/ci.yml` — `verify`, `postgres`, `audit` jobs |
+| `postinstall: prisma generate` | ✅ | also in `vercel-build` |
 | `next build` succeeds | ✅ | 34 routes |
 | Vercel project + env vars per environment | ⚠️ | follow `docs/deployment.md` |
 | DNS (Namecheap → Cloudflare → Vercel) | ⚠️ | `docs/dns.md` |
 | Preview ≠ production database | ⚠️ | separate Supabase projects |
-| Migration step in the deploy pipeline (`prisma migrate deploy`) | ❌ | add to the release job |
-| Rollback plan | ⚠️ | Vercel instant rollback for code; DB migrations need care |
+| Migration step in the deploy pipeline (`prisma migrate deploy`) | ✅ | `vercel.json` `buildCommand` → `npm run vercel-build` (`prisma generate && prisma migrate deploy && next build`); never resets |
+| Rollback plan | ✅ | `docs/disaster-recovery.md` — Vercel promote-previous for code, PITR + migration-recovery for data |
 
 ## BACKUPS
 
 | Item | Status | Notes |
 |---|---|---|
-| Database backups | ⚠️ | Supabase automated PITR — enable + verify a restore |
-| Backup restore drill | ❌ | |
+| Database backups | ⚠️ | Supabase automated PITR — enable + verify a restore (procedure in `docs/disaster-recovery.md`) |
+| Backup restore drill | ⚠️ | procedure documented; one live drill still owed before go-live (restore-drill log in `docs/disaster-recovery.md`) |
 | Data export for a user (GDPR) | ❌ | no self-serve export yet |
-| Account deletion cascade | ⚠️ | `onDelete: Cascade` on `User` covers owned rows; wire the Clerk `user.deleted` webhook to trigger it |
+| Account deletion cascade | ✅ | `onDelete: Cascade` on `User`; Clerk `user.deleted` webhook now deletes the mirror row (cascades owned data); `tests/clerk-webhook.test.ts` |
 
 ## TESTING
 
@@ -170,8 +170,8 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 | Data integrity (usage bypass, idempotency, CSV safety, goals) | ✅ | `tests/data-integrity.test.ts` |
 | API / webhook behaviour | ✅ | `tests/api.test.ts` |
 | Input validation / boundary | ✅ | `tests/validation.test.ts` |
-| **94 tests** total, serial (shared test DB) | ✅ | |
-| Postgres-target CI run | ❌ | run the isolation suite against a Postgres service in CI |
+| **106 tests** total, serial (shared test DB) | ✅ | +Clerk webhook (10), +email templates (2) |
+| Postgres-target CI run | ✅ | `ci.yml` `postgres` job: schema-drift check + `verify:rls` (RLS + cross-user isolation vs real Postgres 18 / PGlite). Prisma service-layer isolation suite vs live Supabase is a documented go-live step |
 | E2E (Playwright) | ❌ | manual browser QA only |
 | Load / soak test | ❌ | |
 
@@ -219,13 +219,28 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 
 ## Remaining blockers (🔴) before a real launch
 
-None that are code blockers. The gating work is **credential + wiring**:
+No code blockers. Clerk wiring, the Clerk webhook, RLS enforcement, HTML email, the
+deploy migration step, and disaster-recovery docs all landed in the production-
+integration pass. What is left is **provisioning + one-time verification against the
+real services** (each STOPs here because it needs a credential this environment does
+not have):
 
-1. **Clerk**: add `clerkMiddleware()` to `proxy.ts`, mount `<SignIn/>`, implement the
-   `/api/webhooks/clerk` Svix handler, set `AUTH_MODE=clerk` + keys.
-2. **Postgres**: create the Supabase project, switch `DATABASE_PROVIDER`, regenerate
-   migrations, run `prisma/rls/policies.sql`, and run the isolation suite against it.
-3. **Deploy pipeline**: add `prisma migrate deploy` to the release job.
-4. **Backups**: enable Supabase PITR and do one restore drill.
+1. **Supabase**: create Preview + Production projects; set `DATABASE_PROVIDER=postgresql`
+   + pooled/direct URLs; `rm -rf prisma/migrations && prisma migrate dev --name init`
+   and diff against `prisma/postgres-preview.sql` (must be identical); `prisma migrate
+   deploy`; `psql -f prisma/rls/policies.sql`; `npm run db:seed`; then run the Prisma
+   service-layer isolation suite against the live DB.
+2. **Clerk**: create the app; set `AUTH_MODE=clerk` + publishable/secret keys;
+   add a Dashboard webhook → `/api/webhooks/clerk` (user.created/updated/deleted) and
+   copy `CLERK_WEBHOOK_SECRET`.
+3. **Vercel**: import repo (uses `vercel.json`); set every env var from `.env.example`
+   per environment; deploy; confirm `/api/health` + real sign-up.
+4. **Stripe / Anthropic / Resend / Upstash / Sentry / PostHog**: add keys per
+   `.env.example`; each integration is built and falls back honestly without its key.
+   Stripe: test mode first (`stripe listen`), then live.
+5. **Pinecone** (optional): the keyword fallback stays; only wire the query path if
+   an index is provisioned (`src/lib/vector` — `pineconeSearch` is the single stub).
+6. **Backups**: enable Supabase PITR; run one restore drill; fill the log in
+   `docs/disaster-recovery.md`.
 
-Everything else above is either ✅ or a normal post-launch iteration.
+Everything else above is ✅ or a normal post-launch iteration.
