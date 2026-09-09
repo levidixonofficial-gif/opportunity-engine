@@ -1,7 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { env, integrations } from "@/lib/env";
-import { publicEnv } from "@/lib/env";
+import { integrations, publicEnv } from "@/lib/env";
 import { stripe, priceForPlan } from "@/lib/stripe";
 import { writeAudit } from "@/lib/audit";
 import type { SubscriptionPlan } from "@/lib/validations/enums";
@@ -64,7 +63,8 @@ export async function createBillingPortal(userId: string): Promise<{ url: string
  * Stripe. Disabled entirely in production and when Stripe IS configured.
  */
 export async function devSetPlan(userId: string, plan: SubscriptionPlan) {
-  if (env.NODE_ENV === "production" || integrations.stripe) {
+  // Read process.env directly: this is a runtime safety gate, not config.
+  if (process.env.NODE_ENV === "production" || integrations.stripe) {
     throw new Error("devSetPlan is disabled (production or Stripe configured).");
   }
   await db.subscription.update({

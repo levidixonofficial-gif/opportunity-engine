@@ -57,6 +57,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </span>
             <Badge tone={sub?.plan === "free" ? "neutral" : "accent"}>{sub?.plan ?? "free"}</Badge>
           </div>
+          {user.role === "admin" && (
+            <Link href="/admin" className="block px-1 text-xs text-accent hover:underline">
+              Admin →
+            </Link>
+          )}
           {signOutButton}
         </div>
       </aside>

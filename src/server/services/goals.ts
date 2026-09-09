@@ -97,13 +97,26 @@ export async function recomputeGoal(userId: string, goalId: string) {
       break; // custom: user-updated only
   }
 
+  const nowAchieved = current >= goal.targetValue && goal.status === "active";
   await db.goal.update({
     where: { id: goalId },
     data: {
       currentValue: current,
-      status: current >= goal.targetValue && goal.status === "active" ? "achieved" : goal.status,
+      status: nowAchieved ? "achieved" : goal.status,
     },
   });
+
+  if (nowAchieved) {
+    await db.notification.create({
+      data: {
+        userId,
+        type: "milestone",
+        title: "Goal reached 🎯",
+        body: `"${goal.title}" — nice work.`,
+        actionUrl: "/goals",
+      },
+    });
+  }
 }
 
 export async function recomputeGoalsForMetric(

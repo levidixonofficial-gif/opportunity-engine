@@ -1,10 +1,10 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getScorerProfile } from "@/server/services/profile";
-import { BUDGET_LABELS, GOAL_LABELS, TIME_LABELS } from "@/lib/validations/enums";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { updateNotificationPrefs, resetOnboarding } from "./actions";
+import { ProfileEditor } from "./ProfileEditor";
 
 export const metadata = { title: "Settings" };
 
@@ -18,10 +18,12 @@ const PREFS: { name: string; label: string }[] = [
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const [pref, profile, scorer] = await Promise.all([
+  const [pref, profile, scorer, allSkills, allInterests] = await Promise.all([
     db.notificationPreference.findUnique({ where: { userId: user.id } }),
     db.profile.findUnique({ where: { userId: user.id } }),
     getScorerProfile(user.id),
+    db.skill.findMany({ orderBy: { label: "asc" }, select: { slug: true, label: true } }),
+    db.interest.findMany({ orderBy: { label: "asc" }, select: { slug: true, label: true } }),
   ]);
 
   return (
@@ -43,14 +45,21 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader><CardTitle>Your profile</CardTitle></CardHeader>
-        <CardContent className="space-y-1 text-sm">
-          <p><span className="text-muted">Goal:</span> {profile?.primaryGoal ? GOAL_LABELS[profile.primaryGoal as keyof typeof GOAL_LABELS] : "—"}</p>
-          <p><span className="text-muted">Budget:</span> {profile?.budgetBand ? BUDGET_LABELS[profile.budgetBand as keyof typeof BUDGET_LABELS] : "—"}</p>
-          <p><span className="text-muted">Time:</span> {profile?.timeBand ? TIME_LABELS[profile.timeBand as keyof typeof TIME_LABELS] : "—"}</p>
-          <p><span className="text-muted">Skills:</span> {scorer.skillSlugs.join(", ") || "—"}</p>
-          <p><span className="text-muted">Interests:</span> {scorer.interestSlugs.join(", ") || "—"}</p>
-          <form action={resetOnboarding} className="pt-2">
-            <Button type="submit" variant="outline" size="sm">Redo onboarding</Button>
+        <CardContent className="space-y-4 text-sm">
+          <ProfileEditor
+            current={{
+              primaryGoal: profile?.primaryGoal ?? "explore",
+              budgetBand: profile?.budgetBand ?? "lt_50",
+              timeBand: profile?.timeBand ?? "1_hr",
+              experienceLevel: profile?.experienceLevel ?? "none",
+            }}
+            skills={allSkills}
+            interests={allInterests}
+            activeSkills={scorer.skillSlugs}
+            activeInterests={scorer.interestSlugs}
+          />
+          <form action={resetOnboarding} className="border-t pt-3">
+            <Button type="submit" variant="outline" size="sm">Redo full onboarding</Button>
           </form>
         </CardContent>
       </Card>

@@ -15,6 +15,9 @@ export default defineConfig({
     globalSetup: ["tests/global-setup.ts"],
     hookTimeout: 30000,
     testTimeout: 15000,
+    // DB-backed suites share one prisma/test.db, so run test files serially to
+    // avoid cross-file resetDb() races.
+    fileParallelism: false,
     coverage: {
       provider: "v8",
       include: ["src/lib/**", "src/server/services/**"],

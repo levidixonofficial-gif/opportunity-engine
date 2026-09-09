@@ -1,71 +1,67 @@
-import { requireAdmin } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { adminOverview } from "@/server/services/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/misc";
+import { FlagToggle } from "./FlagToggle";
 
 export const metadata = { title: "Admin" };
 
-export default async function AdminPage() {
-  await requireAdmin(); // server-side gate — hiding the nav link is not the control
-
-  const [users, opportunities, published, flags, recentSignups] = await Promise.all([
-    db.user.count(),
-    db.opportunity.count(),
-    db.opportunity.count({ where: { status: "published" } }),
-    db.featureFlag.findMany({ orderBy: { key: "asc" } }),
-    db.user.findMany({ orderBy: { createdAt: "desc" }, take: 8, select: { email: true, role: true, createdAt: true } }),
-  ]);
+export default async function AdminOverviewPage() {
+  const o = await adminOverview();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-5 py-8">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <Badge tone="accent">server-enforced</Badge>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Users" value={users} />
-        <Stat label="Opportunities" value={`${published}/${opportunities} published`} />
-        <Stat label="Feature flags" value={flags.length} />
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Stat label="Users" value={`${o.users} (${o.admins} admin)`} />
+        <Stat label="Opportunities" value={`${o.published}/${o.opps} published`} />
+        <Stat label="Feature flags" value={String(o.flags.length)} />
+        <Stat label="New feedback" value={String(o.feedbackNew)} />
       </div>
 
       <Card>
         <CardHeader><CardTitle>Feature flags</CardTitle></CardHeader>
         <CardContent className="divide-y text-sm">
-          {flags.map((f) => (
-            <div key={f.id} className="flex items-center justify-between py-2">
+          {o.flags.map((f) => (
+            <div key={f.id} className="flex items-center justify-between gap-3 py-2.5">
               <div>
                 <p className="font-medium">{f.key}</p>
                 <p className="text-xs text-muted">{f.description}</p>
               </div>
-              <Badge tone={f.state === "on" ? "success" : f.state === "off" ? "neutral" : "warning"}>{f.state}</Badge>
+              <FlagToggle flagKey={f.key} state={f.state} />
             </div>
           ))}
-          <p className="pt-2 text-xs text-muted">Editing UI ships with the admin CRUD in Phase 7. Toggle via DB / seed for now.</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Recent signups</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Recent audit log</CardTitle></CardHeader>
         <CardContent className="divide-y text-sm">
-          {recentSignups.map((u) => (
-            <div key={u.email} className="flex items-center justify-between py-2">
-              <span>{u.email}</span>
-              <span className="text-xs text-muted">{u.role} · {u.createdAt.toLocaleDateString()}</span>
-            </div>
-          ))}
+          {o.recentAudit.length === 0 ? (
+            <p className="py-2 text-muted">No events yet.</p>
+          ) : (
+            o.recentAudit.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-3 py-2">
+                <span>
+                  <Badge>{a.action}</Badge>{" "}
+                  <span className="text-muted">{a.targetType ?? ""} {a.targetId ?? ""}</span>
+                </span>
+                <span className="text-xs text-muted-2">
+                  {a.actor?.email ?? "system"} · {a.createdAt.toLocaleString()}
+                </span>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <Card>
-      <CardContent className="pt-5">
+      <CardContent className="pt-4">
         <p className="text-xs text-muted">{label}</p>
-        <p className="mt-1 text-lg font-semibold">{value}</p>
+        <p className="mt-0.5 text-lg font-semibold">{value}</p>
       </CardContent>
     </Card>
   );
