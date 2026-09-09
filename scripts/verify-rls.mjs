@@ -18,7 +18,8 @@ const db = await PGlite.create();
 let pass = 0;
 let fail = 0;
 const ok = (name, cond) => {
-  cond ? pass++ : fail++;
+  if (cond) pass++;
+  else fail++;
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}`);
 };
 

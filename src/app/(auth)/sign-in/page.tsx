@@ -14,6 +14,10 @@ export default async function SignInPage() {
   if (user) redirect("/dashboard");
 
   const clerkMode = env.AUTH_MODE === "clerk";
+  const ClerkSignIn =
+    clerkMode && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+      ? (await import("@clerk/nextjs")).SignIn
+      : null;
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col justify-center px-5 py-16">
@@ -33,9 +37,13 @@ export default async function SignInPage() {
         </CardHeader>
         <CardContent>
           {clerkMode ? (
-            <p className="text-sm text-muted">
-              Clerk components mount here once <code>@clerk/nextjs</code> is installed (Phase 1.5).
-            </p>
+            ClerkSignIn ? (
+              <ClerkSignIn routing="hash" />
+            ) : (
+              <p className="text-sm text-muted">
+                Set <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> to load the Clerk sign-in form.
+              </p>
+            )
           ) : (
             <form action={devSignIn} className="space-y-4">
               <div className="space-y-1.5">

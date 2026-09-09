@@ -5,11 +5,11 @@ import { env } from "@/lib/env";
  * key is present). In dev mode it is a passthrough, so the dev signed-cookie
  * shim keeps working with zero Clerk config.
  *
- * Remaining Clerk wiring (see docs/authentication.md):
- *   1. set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY + CLERK_SECRET_KEY + AUTH_MODE=clerk
- *   2. add `clerkMiddleware()` to proxy.ts
- *   3. mount <SignIn/> on /sign-in
- *   4. point the Clerk dashboard webhook at /api/webhooks/clerk
+ * Clerk wiring is complete in code: `clerkMiddleware()` in proxy.ts, `<SignIn/>`
+ * on /sign-in, and the /api/webhooks/clerk lifecycle handler. To go live, set
+ * AUTH_MODE=clerk + NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY + CLERK_SECRET_KEY +
+ * CLERK_WEBHOOK_SECRET, and point a Clerk Dashboard webhook (user.created,
+ * user.updated, user.deleted) at /api/webhooks/clerk. See docs/authentication.md.
  */
 export async function AuthProvider({ children }: { children: React.ReactNode }) {
   if (env.AUTH_MODE !== "clerk" || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {

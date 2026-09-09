@@ -43,7 +43,9 @@ describe("POST /api/webhooks/stripe", () => {
 
 describe("POST /api/webhooks/clerk", () => {
   it("returns 501 until AUTH_MODE=clerk + secret are set", async () => {
-    const res = await clerkPOST();
+    const res = await clerkPOST(
+      new Request("http://localhost/api/webhooks/clerk", { method: "POST", body: "{}" }) as never,
+    );
     expect(res.status).toBe(501);
   });
 });

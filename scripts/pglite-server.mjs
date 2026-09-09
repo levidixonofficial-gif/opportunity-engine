@@ -25,7 +25,6 @@ await db.waitReady;
 
 const server = new PGLiteSocketServer({ db, port, host: "127.0.0.1" });
 await server.start();
-// eslint-disable-next-line no-console
 console.log(`[pglite] PostgreSQL on 127.0.0.1:${port} (${ephemeral ? "ephemeral" : dataDir})`);
 
 const shutdown = async () => {
