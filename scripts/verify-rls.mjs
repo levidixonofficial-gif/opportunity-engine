@@ -1,20 +1,31 @@
 /**
  * Verifies prisma/rls/policies.sql actually ENFORCES per-user Row Level Security
  * against a real PostgreSQL engine: SELECT visibility, INSERT WITH CHECK, UPDATE,
- * DELETE, service-role bypass, fully-locked tables, and transitive ownership.
+ * DELETE, service-role bypass, fully-locked tables, transitive ownership, and
+ * cross-user isolation across every owned entity.
  *
- * Uses PGlite (real PostgreSQL 18, in-process) so it runs anywhere with no Docker
- * and no external database:
+ * Default — in-process PGlite (real PostgreSQL 18, no Docker, no server):
  *
  *   node scripts/verify-rls.mjs
  *
+ * Against an external PostgreSQL / Supabase database:
+ *
+ *   PGURL="postgresql://…" VERIFY_RLS_ALLOW_DESTRUCTIVE=1 node scripts/verify-rls.mjs
+ *
+ * The external path DROPS AND RECREATES the `public` schema, so it must only ever
+ * point at a DISPOSABLE database — a Supabase branch or a throwaway project, never
+ * production. It refuses to run without VERIFY_RLS_ALLOW_DESTRUCTIVE=1.
+ *
  * The auth.jwt() shim mirrors what Supabase provides in production (there the real
- * function already exists). This script is a test tool — it is not part of the app.
+ * function already exists; re-creating it is harmless). This is a test tool — not
+ * part of the app.
  */
-import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
-const db = await PGlite.create();
+const SCHEMA_SQL = readFileSync("prisma/migrations/20260910000000_init/migration.sql", "utf8");
+const POLICIES_SQL = readFileSync("prisma/rls/policies.sql", "utf8");
+const PGURL = process.env.PGURL || "";
+
 let pass = 0;
 let fail = 0;
 const ok = (name, cond) => {
@@ -23,23 +34,61 @@ const ok = (name, cond) => {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}`);
 };
 
-// prisma/postgres-preview.sql is the generated `migrate diff --from-empty` output
-// (verified in CI to match schema.prisma). Strip its leading comment header.
-const previewSql = readFileSync("prisma/postgres-preview.sql", "utf8");
-await db.exec(previewSql.slice(previewSql.indexOf("-- CreateSchema")));
+/** Thin DB wrapper so the same checks run on PGlite (in-process) or node-postgres. */
+async function openDb() {
+  if (PGURL) {
+    if (process.env.VERIFY_RLS_ALLOW_DESTRUCTIVE !== "1") {
+      console.error(
+        "Refusing to run against PGURL without VERIFY_RLS_ALLOW_DESTRUCTIVE=1 — this DROPs the public schema.\n" +
+          "Point it at a disposable database (Supabase branch / scratch project) and set the flag.",
+      );
+      process.exit(2);
+    }
+    const { default: pg } = await import("pg");
+    const client = new pg.Client({ connectionString: PGURL });
+    await client.connect();
+    return {
+      mode: `external (${new URL(PGURL.replace(/^postgres(ql)?:/, "http:")).host})`,
+      exec: (sql) => client.query(sql),
+      query: async (sql, params) => {
+        const r = await client.query(sql, params);
+        return { rows: r.rows, affectedRows: r.rowCount ?? 0 };
+      },
+      close: () => client.end(),
+    };
+  }
+  const { PGlite } = await import("@electric-sql/pglite");
+  const db = await PGlite.create();
+  return {
+    mode: "in-process PGlite",
+    exec: (sql) => db.exec(sql),
+    query: async (sql, params) => {
+      const r = await db.query(sql, params);
+      return { rows: r.rows, affectedRows: r.affectedRows ?? 0 };
+    },
+    close: () => db.close(),
+  };
+}
+
+const db = await openDb();
+console.log(`# RLS verification — ${db.mode}\n`);
+
+await db.exec("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
+await db.exec(SCHEMA_SQL.slice(SCHEMA_SQL.indexOf("-- CreateSchema")));
 await db.exec(`create schema if not exists auth`);
 await db.exec(`
   create or replace function auth.jwt() returns jsonb language sql stable as $shim$
     select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
   $shim$`);
-await db.exec(readFileSync("prisma/rls/policies.sql", "utf8"));
+await db.exec(POLICIES_SQL);
 
 // App role: non-owner, non-superuser — the case RLS must actually cover
 // (mirrors Supabase's `authenticated` role).
-await db.exec(`create role app_user nologin`);
-await db.exec(`grant usage on schema public, auth to app_user`);
-await db.exec(`grant select, insert, update, delete on all tables in schema public to app_user`);
-await db.exec(`grant execute on function auth.jwt(), current_app_user_id() to app_user`);
+await db.exec(`drop role if exists rls_probe_user`);
+await db.exec(`create role rls_probe_user nologin`);
+await db.exec(`grant usage on schema public, auth to rls_probe_user`);
+await db.exec(`grant select, insert, update, delete on all tables in schema public to rls_probe_user`);
+await db.exec(`grant execute on function auth.jwt(), current_app_user_id() to rls_probe_user`);
 
 // Seed as the owner (RLS bypassed for the migration / service-role connection).
 await db.exec(`
@@ -76,7 +125,7 @@ await db.exec(`
 const asApp = async (sub, sql) => {
   // session-level (not transaction-local): PGlite autocommits each statement
   await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub })]);
-  await db.exec(`set role app_user`);
+  await db.exec(`set role rls_probe_user`);
   try {
     return await db.query(sql);
   } finally {

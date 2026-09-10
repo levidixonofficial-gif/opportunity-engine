@@ -2,63 +2,95 @@
 
 ## Provider strategy
 
-| Environment | Provider | URL |
+**PostgreSQL everywhere.** (The SQLite dev path was retired on 2026-09-10; it lives
+in git history up to `3154fe9`.)
+
+| Environment | PostgreSQL | Connection |
 |---|---|---|
-| Local dev | SQLite | `file:./prisma/dev.db` |
-| Preview / Production | PostgreSQL (Supabase) | pooled connection string in `DATABASE_URL`, direct in `DIRECT_DATABASE_URL` |
+| Local dev + CI | PGlite — embedded Postgres 18, no Docker | `npm run pg:up` serves it on `127.0.0.1:55432` over the wire protocol; `.env` points there |
+| Test suite | PGlite — in-process | `tests/stubs/db.ts` (aliased over `@/lib/db` by vitest); no server, no port |
+| Preview / Production | Supabase | pooled URL in `DATABASE_URL`, direct URL in `DIRECT_DATABASE_URL` |
 
 Prisma 7 keeps the connection URL in `prisma.config.ts` (not the schema) and needs a
-**driver adapter**. `src/lib/db.ts` picks the adapter from `DATABASE_PROVIDER`:
-`@prisma/adapter-pg` for Postgres, `@prisma/adapter-better-sqlite3` for SQLite.
+**driver adapter**. `src/lib/db.ts` uses `@prisma/adapter-pg` (`max: 1` — the
+Supabase transaction-pooler / serverless recommendation). `prisma.config.ts` uses
+`DIRECT_DATABASE_URL ?? DATABASE_URL` so `prisma migrate deploy` runs against the
+non-pooled connection.
+
+### Local setup
+
+```bash
+npm run pg:up          # terminal 1 — leave running (embedded Postgres, data in .pglite/)
+npm run db:deploy      # terminal 2 — apply migrations
+npm run db:seed
+npm run dev
+```
+
+`npm run build` and `npm run dev` both need `pg:up` running (as `next dev` always
+did with a DB). A build without it still succeeds — DB-backed pages are dynamic and
+just log connection errors during prerender.
 
 ### Portability constraints
 
-The schema runs on both engines, so it avoids:
+The schema stays engine-neutral (it ran on SQLite until 2026-09-10 and the
+constraints are cheap to keep):
 
 - native `enum` types → `String` columns validated by Zod unions in
   `src/lib/validations/enums.ts`
 - scalar list fields (`String[]`) → explicit join tables
 - engine-specific column types
 
-## Switching to Postgres
+## Migrations
 
-The committed migrations are SQLite-flavoured and are **not** applied on Postgres —
-they are regenerated. [`prisma/postgres-preview.sql`](../prisma/postgres-preview.sql)
-is a generated preview of exactly what the first Postgres migration will create
-(run `prisma migrate diff` with the provider flipped), so there are no surprises.
+`prisma/migrations/20260910000000_init/migration.sql` is the single PostgreSQL
+init migration. It was generated deterministically from the schema
+(`prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`);
+CI (`postgres` job) fails if it ever stops matching `schema.prisma`, and also
+runs `prisma migrate deploy` against a real Postgres and asserts zero drift.
 
-1. Create a Supabase project.
-2. In `.env.local`:
+**Authoring a new migration** (no shadow DB with PGlite, so not `migrate dev`):
+
+```bash
+npm run pg:up          # if not already running
+npx prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-schema prisma/schema.prisma \
+  --script > prisma/migrations/$(date +%Y%m%d%H%M%S)_<name>/migration.sql
+npm run db:deploy
+```
+
+## Connecting Supabase (preview / production)
+
+1. Create the Supabase project(s).
+2. Set in `.env.local` (local verification) and in Vercel (Preview + Production):
    ```
    DATABASE_PROVIDER="postgresql"
    DATABASE_URL="postgresql://…pooler.supabase.com:6543/postgres?pgbouncer=true"
    DIRECT_DATABASE_URL="postgresql://…pooler.supabase.com:5432/postgres"
    ```
-3. In `prisma/schema.prisma` set `datasource db { provider = "postgresql" }`.
-4. `rm -rf prisma/migrations` then `npm run db:migrate -- --name init` to regenerate
-   migrations for Postgres. Diff the result against `postgres-preview.sql`.
-5. `npm run db:seed`.
-6. Apply RLS policies: `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`.
-   Supabase already provides `auth.jwt()`; nothing else to install.
-7. Verify RLS + isolation. `npm run verify:rls` runs the full policy check against
-   real PostgreSQL 18 (PGlite, in-process, no Docker) — SELECT visibility, INSERT
+3. `npm run db:deploy` (= `prisma migrate deploy`) — applies the init migration.
+   Never `db:push`, never `migrate reset`.
+4. `npm run db:seed`.
+5. `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`. Supabase already
+   provides `auth.jwt()`; nothing else to install.
+6. Verify the live schema matches the code:
+   `npx prisma migrate diff --from-config-datasource prisma.config.ts --to-schema prisma/schema.prisma --exit-code`
+   (exit 0 = match).
+7. Verify RLS + cross-user isolation. `npm run verify:rls` runs the full policy
+   check against real PostgreSQL 18 (in-process PGlite) — SELECT visibility, INSERT
    `WITH CHECK`, UPDATE/DELETE scoping, locked tables (`User`/`AuditLog`/
-   `WebhookEvent`), transitive ownership (`Milestone`, `AiMessage`), and cross-user
-   isolation across every owned entity. It also runs in CI (the `postgres` job).
-   Against the live Supabase DB, additionally run the Prisma service-layer suite:
-   `DATABASE_PROVIDER=postgresql DATABASE_URL=<direct> npx vitest run tests/isolation.test.ts`.
+   `WebhookEvent`), transitive ownership (`Milestone`, `AiMessage`), and per-user
+   isolation across `Project` / `Task` / `Contact` / `Transaction` / `Goal` /
+   `Deal` / `Milestone` / `AiMessage`. It also runs in CI (`postgres` job).
 
-### Keeping `postgres-preview.sql` honest
-
-CI (`postgres` job) regenerates the diff from `schema.prisma` and fails if it no
-longer matches `prisma/postgres-preview.sql`, so the preview can never drift from
-the schema. Regenerate it after any schema change:
-
-```
-sed 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma > /tmp/pg.prisma
-npx prisma migrate diff --from-empty --to-schema /tmp/pg.prisma --script > prisma/postgres-preview.sql
-# then re-add the header comment block
-```
+   To run the exact same checks against the **real** Postgres wire protocol —
+   point it at a **disposable** copy of the Supabase database (a branch or a
+   scratch project; it drops and recreates the `public` schema, so **never
+   production**):
+   ```
+   PGURL="<direct-url-of-the-copy>" VERIFY_RLS_ALLOW_DESTRUCTIVE=1 npm run verify:rls
+   ```
+   It refuses to run against `PGURL` without that flag.
 
 ## Schema overview
 
@@ -92,10 +124,10 @@ Platform: `Notification`, `NotificationPreference`, `KnowledgeDocument`,
 - `SavedOpportunity`, `UsageCounter`, `FeatureFlagOverride` have composite unique keys.
 - All FKs use `onDelete: Cascade` for owned data and `SetNull` for optional links.
 
-## Row Level Security (production)
+## Row Level Security
 
-`prisma/rls/policies.sql` (added in Phase 1.5) enables RLS on every user-owned table
-with a policy of the form:
+`prisma/rls/policies.sql` enables RLS on every user-owned table with a policy of
+the form:
 
 ```sql
 alter table "Task" enable row level security;
@@ -123,8 +155,10 @@ path that uses the Supabase client directly.
 
 | Script | Purpose |
 |---|---|
-| `npm run db:migrate` | create + apply a dev migration |
-| `npm run db:deploy` | apply migrations (CI / prod) |
+| `npm run pg:up` | start the local embedded PGlite Postgres (`127.0.0.1:55432`) |
+| `npm run db:deploy` | `prisma migrate deploy` — apply pending migrations (local / CI / prod) |
 | `npm run db:seed` | idempotent reference-data seed (categories, skills, opportunities, flags) |
 | `npm run db:studio` | Prisma Studio |
-| `npm run db:reset` | drop + re-migrate + re-seed (dev only) |
+| `npm run db:migrate` | `prisma migrate dev` — needs a shadow-DB-capable Postgres; for a new migration prefer the `migrate diff` recipe above |
+| `npm run db:reset` | `prisma migrate reset` — drop + re-migrate + re-seed. **Local disposable DB only — never against Supabase.** |
+| `npm run verify:rls` | RLS + cross-user isolation check against real Postgres |

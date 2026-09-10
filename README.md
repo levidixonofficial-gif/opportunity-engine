@@ -37,16 +37,17 @@ for rollback/restore.
 ## Stack
 
 Next.js 16 (App Router, RSC) · React 19 · TypeScript (strict) · Tailwind v4 ·
-Prisma 7 (SQLite dev / Postgres-Supabase prod) · Clerk auth (dev shim included) ·
-Stripe · Anthropic Claude · Pinecone · Upstash · Resend · PostHog · Sentry ·
-Vercel / Cloudflare / Namecheap.
+Prisma 7 · PostgreSQL everywhere (PGlite locally, Supabase in prod) ·
+Clerk auth (dev shim included) · Stripe · Anthropic Claude · Pinecone · Upstash ·
+Resend · PostHog · Sentry · Vercel / Cloudflare / Namecheap.
 
 ## Quick start
 
 ```bash
 npm install
 cp .env.example .env.local        # optional; committed .env has working dev defaults
-npm run db:migrate                # create the local SQLite db
+npm run pg:up                     # terminal 1 — embedded PostgreSQL (PGlite, no Docker)
+npm run db:deploy                 # terminal 2 — apply migrations
 npm run db:seed                   # reference data (opportunities, skills, ...)
 npm run dev                       # http://localhost:3000
 ```
@@ -62,9 +63,9 @@ test account (tick "admin" for `/admin`). Complete onboarding to reach the dashb
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` / `test:watch` / `test:coverage` | Vitest |
-| `npm run db:migrate` / `db:deploy` / `db:seed` / `db:studio` / `db:reset` | Prisma |
-| `npm run verify:rls` | RLS + cross-user isolation vs real Postgres (PGlite) |
-| `npm run pg:up` | local Postgres over the wire protocol (manual testing) |
+| `npm run pg:up` | start the local embedded PostgreSQL (PGlite, no Docker) |
+| `npm run db:deploy` / `db:seed` / `db:studio` / `db:reset` | Prisma (`db:reset` = local disposable DB only) |
+| `npm run verify:rls` | RLS + cross-user isolation vs real Postgres |
 
 Full verification (what CI runs): `npm run typecheck && npm run lint && npm test && npm run build`
 Postgres/RLS check: `npm run verify:rls` (real PostgreSQL 18 via PGlite, no Docker).

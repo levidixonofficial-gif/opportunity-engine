@@ -17,7 +17,7 @@ the app additionally refuses to start if any of these hold (see
 | `AUTH_MODE !== "clerk"` | the dev signed-cookie shim lets anyone sign in as anyone |
 | `AUTH_MODE=clerk` without `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk can't verify sessions |
 | `DEV_AUTH_SECRET` still the checked-in default | forgeable dev sessions |
-| `DATABASE_PROVIDER !== "postgresql"` | SQLite is ephemeral on serverless |
+| `DATABASE_PROVIDER !== "postgresql"` | only PostgreSQL is supported |
 | `NEXT_PUBLIC_APP_URL` contains `localhost` | Stripe redirects / emails would point at localhost |
 
 (The check is skipped during `next build`, where `NODE_ENV=production` but the
@@ -30,9 +30,9 @@ Legend: **R** required · **P** required in production only · **O** optional (f
 | Variable | Scope | Class | Used by | Notes |
 |---|---|---|---|---|
 | `NODE_ENV` | server | R | everything | `development` \| `test` \| `production` (default `development`) |
-| `DATABASE_PROVIDER` | server | R | `lib/db`, `lib/db-helpers` | `sqlite` dev / `postgresql` prod. Drives the Prisma driver adapter + case-insensitive search. |
-| `DATABASE_URL` | server | R | `lib/db`, `prisma.config.ts` | Pooled connection string in prod. |
-| `DIRECT_DATABASE_URL` | server | P | `lib/db` (Postgres) | Non-pooled URL for `prisma migrate` and long transactions. |
+| `DATABASE_PROVIDER` | server | R | `lib/db`, `lib/db-helpers` | Must be `postgresql`. Drives the Prisma driver adapter + case-insensitive search. |
+| `DATABASE_URL` | server | R | `lib/db`, `prisma.config.ts` | Pooled connection string in prod; PGlite URL locally (`npm run pg:up`). |
+| `DIRECT_DATABASE_URL` | server | P | `lib/db`, `prisma.config.ts` | Non-pooled URL — `prisma migrate deploy` and the app both prefer it over `DATABASE_URL`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | server | O | — (reserved) | Phase 1.5 Supabase Storage / RLS-admin. Not read today. |
 | `AUTH_MODE` | server | R | `lib/auth`, `components/auth-provider` | `dev` \| `clerk`. Must be `clerk` in production. |
 | `DEV_AUTH_SECRET` | server | R | `lib/auth` (dev mode) | HMAC key for the dev session cookie. Must be changed from the default. |

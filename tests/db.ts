@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 
-/** Order matters: children before parents (SQLite FK enforcement is ON via Prisma). */
+/** Order matters: children before parents (PostgreSQL enforces every FK). */
 const TABLES = [
   "WebhookEvent",
   "AuditLog",

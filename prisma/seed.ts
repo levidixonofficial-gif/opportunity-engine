@@ -12,7 +12,7 @@ import { config as loadEnv } from "dotenv";
 
 loadEnv({ path: [".env.local", ".env"] });
 
-const provider = process.env.DATABASE_PROVIDER ?? "sqlite";
+const provider = process.env.DATABASE_PROVIDER ?? "postgresql";
 const url = process.env.DATABASE_URL!;
 const adapter =
   provider === "postgresql" ? new PrismaPg({ connectionString: url }) : new PrismaBetterSqlite3({ url });

@@ -3,14 +3,15 @@
 Legend: ✅ done & verified · 🔩 partial · ⛏ not started
 
 ## Phase 1 — Foundation ✅
-Next.js 16 + TS strict + Tailwind v4 + `components/ui`; Prisma 7 (SQLite dev /
-Postgres prod, driver adapters); auth abstraction (dev signed-cookie shim /
-Clerk-ready); env validation; entitlements map; deterministic Opportunity Fit
+Next.js 16 + TS strict + Tailwind v4 + `components/ui`; Prisma 7 (PostgreSQL
+everywhere — PGlite locally, Supabase in prod; driver adapter); auth abstraction
+(dev signed-cookie shim / Clerk-ready); env validation; entitlements map;
+deterministic Opportunity Fit
 Score; onboarding → personalization pipeline; app shell; dashboard; opportunities
 list/detail; save/compare/focus; template plan → tasks; admin; `/api/health`.
 
 ## Phase 1.5 — Security & testing ✅
-- ✅ Vitest harness (`tests/`), throwaway `prisma/test.db`, `resetDb`/`makeUser`
+- ✅ Vitest harness (`tests/`), in-process PGlite Postgres, `resetDb`/`makeUser`
 - ✅ 43 tests: scorer (bounds/determinism/monotonicity/ranking), entitlements,
   generators (schema-valid, no guarantee phrasing), attribution (UTM allow-list),
   **cross-user isolation** across projects/goals/CRM/money/outreach/tasks, goal

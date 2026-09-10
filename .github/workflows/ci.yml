@@ -5,15 +5,16 @@ on:
     branches: [main, development]
   pull_request:
 
+env:
+  DATABASE_PROVIDER: postgresql
+  DATABASE_URL: "postgresql://postgres@127.0.0.1:55432/postgres?sslmode=disable"
+  DIRECT_DATABASE_URL: "postgresql://postgres@127.0.0.1:55432/postgres?sslmode=disable"
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+  DEV_AUTH_SECRET: "ci-secret"
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    env:
-      NODE_ENV: test
-      DATABASE_PROVIDER: sqlite
-      DATABASE_URL: "file:./prisma/dev.db"
-      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
-      DEV_AUTH_SECRET: "ci-secret"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,12 +25,13 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      - run: npm test # in-process PGlite (tests/stubs/db.ts) — no server needed
+      # DB-backed pages are all dynamic; `next build` prerenders them best-effort
+      # and still succeeds if the DB is unreachable (as on Vercel it never is —
+      # vercel-build runs `prisma migrate deploy` against Supabase first).
       - run: npm run build
 
-  # Postgres / Supabase readiness — runs against real PostgreSQL 18 (PGlite,
-  # in-process, no Docker): proves the generated Postgres schema is current, and
-  # that prisma/rls/policies.sql actually enforces per-user isolation.
+  # Postgres / Supabase readiness — real PostgreSQL 18 (PGlite), no Docker.
   postgres:
     runs-on: ubuntu-latest
     steps:
@@ -39,14 +41,20 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # 1. schema drift: postgres-preview.sql must match a fresh diff of schema.prisma
-      - name: Postgres schema is up to date
+      # 1. the committed init migration still equals the Prisma schema
+      - name: init migration matches schema.prisma
         run: |
-          sed 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma > /tmp/pg.prisma
-          npx prisma migrate diff --from-empty --to-schema /tmp/pg.prisma --script 2>/dev/null \
+          npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script 2>/dev/null \
             | grep -vE 'injected env|Loaded Prisma config' > /tmp/fresh.sql
-          diff <(tail -n +16 prisma/postgres-preview.sql | grep -vE '^\s*$') <(grep -vE '^\s*$' /tmp/fresh.sql)
-      # 2. RLS + cross-user isolation against real Postgres
+          diff <(grep -vE '^\s*$' prisma/migrations/20260910000000_init/migration.sql) <(grep -vE '^\s*$' /tmp/fresh.sql)
+      # 2. it applies cleanly to a real Postgres via `migrate deploy` and leaves no drift
+      - name: prisma migrate deploy against real Postgres
+        run: |
+          node scripts/pglite-server.mjs &
+          node -e "const{setTimeout:s}=require('timers/promises');const{Client}=require('pg');(async()=>{for(let i=0;i<60;i++){try{const c=new Client(process.env.DATABASE_URL);await c.connect();await c.end();process.exit(0)}catch{await s(500)}}process.exit(1)})()"
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource prisma.config.ts --to-schema prisma/schema.prisma --exit-code
+      # 3. RLS + cross-user isolation enforced (in-process PGlite)
       - run: npm run verify:rls
 
   audit:

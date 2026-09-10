@@ -5,13 +5,20 @@ import { env } from "@/lib/env";
 
 /**
  * Prisma 7 requires a driver adapter (the Rust query engine was removed).
- * We pick the adapter from DATABASE_PROVIDER so the same app code runs on
- * local SQLite and on Supabase Postgres with only an env change.
+ * PostgreSQL everywhere — PGlite over the wire locally (`npm run pg:up`),
+ * Supabase in preview/production. The SQLite adapter is retained only for
+ * git-history parity and is unreachable with the `postgresql` schema.
+ * (Tests swap this whole module for an in-process PGlite — tests/stubs/db.ts.)
+ *
+ * `max: 1` — one connection per process: the Prisma + Supabase transaction-
+ * pooler recommendation for serverless (pgbouncer multiplexes across instances),
+ * and it also minimises churn against the local PGlite socket server. Prisma
+ * queues concurrent queries at the client layer.
  */
 function createPrisma(): PrismaClient {
   const adapter =
     env.DATABASE_PROVIDER === "postgresql"
-      ? new PrismaPg({ connectionString: env.DIRECT_DATABASE_URL ?? env.DATABASE_URL })
+      ? new PrismaPg({ connectionString: env.DIRECT_DATABASE_URL ?? env.DATABASE_URL, max: 1 })
       : new PrismaBetterSqlite3({ url: env.DATABASE_URL });
 
   return new PrismaClient({

@@ -33,8 +33,8 @@ Every feature maps onto a stage:
 | Framework | Next.js 16 (App Router, RSC) + React 19 + TypeScript (strict) | `proxy.ts` (renamed from `middleware.ts`) |
 | Styling | Tailwind CSS v4 + hand-rolled `components/ui` primitives + `motion` | design tokens in `globals.css`, `prefers-reduced-motion` respected |
 | Forms | React Hook Form + Zod; Zod also validates server actions & route handlers | |
-| DB | PostgreSQL (Supabase) in prod, SQLite in local dev | Prisma 7 with driver adapters; schema is provider-portable |
-| ORM | Prisma 7 (`@prisma/adapter-pg` / `@prisma/adapter-better-sqlite3`) | connection URL lives in `prisma.config.ts` |
+| DB | PostgreSQL everywhere — PGlite locally (`npm run pg:up`), Supabase in prod | Prisma 7 with a driver adapter; schema stays engine-neutral |
+| ORM | Prisma 7 (`@prisma/adapter-pg`, `max: 1`) | connection URL lives in `prisma.config.ts` (`DIRECT_DATABASE_URL ?? DATABASE_URL`); tests swap in an in-process PGlite adapter |
 | Auth | Clerk (`AUTH_MODE=clerk`) with a local signed-cookie shim (`AUTH_MODE=dev`) | one `getAuthUser()` interface |
 | Payments | Stripe (Phase 6) | plan mirrored onto `Subscription`, synced by webhook |
 | AI | Anthropic Claude (Phase 4) | usage metered per plan |

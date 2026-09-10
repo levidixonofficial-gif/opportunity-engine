@@ -17,8 +17,11 @@ vi.mock("@/lib/env", () => {
     AUTH_MODE: "clerk",
     CLERK_WEBHOOK_SECRET: SIGNING_SECRET,
     CLERK_SECRET_KEY: "sk_test_x",
-    DATABASE_PROVIDER: "sqlite",
-    DATABASE_URL: "file:./prisma/test.db",
+    // Keep the real test DB wiring (set by tests/setup.ts) so @/lib/db still
+    // reaches the shared PGlite Postgres — only the auth fields are overridden.
+    DATABASE_PROVIDER: process.env.DATABASE_PROVIDER ?? "postgresql",
+    DATABASE_URL: process.env.DATABASE_URL,
+    DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
     DEV_AUTH_SECRET: "test-secret",
   };
   return {
@@ -152,7 +155,7 @@ describe("POST /api/webhooks/clerk — unconfigured", () => {
   it("returns 501 when AUTH_MODE!=clerk (separate module state)", async () => {
     vi.resetModules();
     vi.doMock("@/lib/env", () => ({
-      env: { AUTH_MODE: "dev", CLERK_WEBHOOK_SECRET: undefined, DATABASE_PROVIDER: "sqlite", DATABASE_URL: "file:./prisma/test.db", NODE_ENV: "test" },
+      env: { AUTH_MODE: "dev", CLERK_WEBHOOK_SECRET: undefined, DATABASE_PROVIDER: "postgresql", DATABASE_URL: process.env.DATABASE_URL, DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL, NODE_ENV: "test" },
       publicEnv: {},
       integrations: { clerk: false },
       productionConfigProblems: () => [],

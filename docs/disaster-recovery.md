@@ -23,10 +23,10 @@ RTO = time to recover. RPO = acceptable data loss window.
   you only get daily snapshots (RPO = 24 h).
 - **Verify** monthly that a backup exists and is recent (dashboard shows the latest
   restore point). Record the check date below.
-- **Schema + seed** are in git: `prisma/migrations/` (SQLite dev) +
-  `prisma/postgres-preview.sql` (the generated Postgres schema, CI-checked against
-  `schema.prisma`) + `prisma/seed.ts` (idempotent reference data). A database can be
-  rebuilt structurally from the repo alone; only user data needs a backup.
+- **Schema + seed** are in git: `prisma/migrations/` (the PostgreSQL init
+  migration, CI-checked against `schema.prisma`) + `prisma/seed.ts` (idempotent
+  reference data). A database can be rebuilt structurally from the repo alone;
+  only user data needs a backup.
 - **Code** is in GitHub. **Secrets** live only in Vercel/Supabase/Clerk/etc. env
   settings — there is no secret backup by design; recovery = re-issue (section 4).
 - **No PII in logs.** Sentry/PostHog hold operational data only, so they are not
@@ -82,9 +82,9 @@ A migration failed halfway (`P3009` / `migrate status` shows a failed migration)
   --rolled-back <name>`, fix the migration SQL, redeploy.
 - If it **partially** applied: restore the DB (section 2) to before the migration,
   fix the migration, then `prisma migrate deploy` again.
-- The generated Postgres baseline is `prisma/postgres-preview.sql`; CI fails if it
-  drifts from `schema.prisma`, so it is always a faithful "what the schema should
-  be" reference for hand-repair.
+- The canonical schema is `prisma/migrations/20260910000000_init/migration.sql`;
+  CI fails if it drifts from `schema.prisma`, so it is always a faithful "what the
+  schema should be" reference for hand-repair.
 
 ## 3. Rebuild a lost database
 
@@ -92,9 +92,8 @@ The Supabase project itself is gone and no in-place restore is possible.
 
 1. Create a new Supabase project (same region).
 2. Set `DATABASE_URL` (pooled) + `DIRECT_DATABASE_URL` (direct) in Vercel.
-3. `npx prisma migrate deploy` — creates the schema from `prisma/migrations/`
-   (Postgres migration set; see docs/database.md "Switching to Postgres" if the
-   repo is still on the SQLite set).
+3. `npm run db:deploy` (= `prisma migrate deploy`) — creates the schema from
+   `prisma/migrations/`. Never `db:push`, never `migrate reset`.
 4. `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`
 5. `npm run db:seed` — reference data (categories, skills, opportunities, flags).
 6. Import the most recent user-data backup (`pg_restore` of the latest Supabase

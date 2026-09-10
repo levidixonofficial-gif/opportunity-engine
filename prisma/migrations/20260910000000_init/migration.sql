@@ -1,18 +1,3 @@
--- ===========================================================================
--- Opportunity Engine — PostgreSQL schema PREVIEW (generated, do not apply directly)
---
--- This is `prisma migrate diff --from-empty` against schema.prisma with the
--- provider flipped to postgresql. It shows EXACTLY what the first Postgres
--- migration will create, so the SQLite->Supabase switch has no surprises.
---
--- To migrate for real (see docs/database.md):
---   1. set DATABASE_PROVIDER=postgresql + DATABASE_URL/DIRECT_DATABASE_URL
---   2. edit schema.prisma: datasource db { provider = "postgresql" }
---   3. rm -rf prisma/migrations && npm run db:migrate -- --name init
---   4. psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql
---   Regenerate this file:  npx prisma migrate diff --from-empty --to-schema <pg-schema> --script
--- ===========================================================================
-
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 

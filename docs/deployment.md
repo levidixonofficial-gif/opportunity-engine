@@ -17,7 +17,7 @@ the Vercel records — see `dns.md`). Vercel is the host.
 
 | Env | Branch | Database | Notes |
 |---|---|---|---|
-| Development | local | SQLite | `AUTH_MODE=dev` |
+| Development | local | PGlite (`npm run pg:up`) | `AUTH_MODE=dev` |
 | Preview | any PR / `development` | a dedicated Supabase project (or branch) | `AUTH_MODE=clerk` test instance |
 | Production | `main` | production Supabase project | live keys |
 
@@ -37,13 +37,13 @@ Never share a database between Preview and Production.
 3. **Env vars** (Vercel → Settings → Environment Variables): set every key from
    `.env.example` for Preview and Production separately. `NEXT_PUBLIC_APP_URL` =
    the environment's own URL.
-4. **Supabase**: create project(s), copy pooled + direct connection strings. The
-   committed migrations are SQLite-flavoured — regenerate for Postgres first
-   (`docs/database.md` "Switching to Postgres": flip the provider,
-   `rm -rf prisma/migrations && prisma migrate dev --name init`, diff against
-   `prisma/postgres-preview.sql`). Then `npm run db:deploy` + `npm run db:seed`,
-   apply `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`, and
-   `npm run verify:rls` against a copy.
+4. **Supabase**: create project(s), copy the pooled + direct connection strings
+   into `DATABASE_URL` / `DIRECT_DATABASE_URL`. Then `npm run db:deploy`
+   (= `prisma migrate deploy` — applies the single init migration; never
+   `db:push`, never `migrate reset`), `npm run db:seed`, apply
+   `psql "$DIRECT_DATABASE_URL" -f prisma/rls/policies.sql`, and verify:
+   `npx prisma migrate diff --from-config-datasource prisma.config.ts --to-schema prisma/schema.prisma --exit-code`
+   then `npm run verify:rls` (see `docs/database.md`).
 5. **Clerk**: create app, set the production domain, configure Google OAuth, add the
    webhook endpoint `https://<domain>/api/webhooks/clerk` and copy the signing secret.
 6. **Stripe** (Phase 6): create products/prices, add webhook
@@ -60,8 +60,9 @@ Never share a database between Preview and Production.
 - [ ] `npm run build` succeeds
 - [ ] `npm test` green (Phase 1.5+)
 - [ ] `npm run verify:rls` green (RLS + cross-user isolation vs real Postgres)
-- [ ] migrations applied to Preview via `prisma migrate deploy`; live-DB isolation
-      spot-check (`DATABASE_PROVIDER=postgresql DATABASE_URL=<direct> npx vitest run tests/isolation.test.ts`)
+- [ ] migrations applied to Preview via `prisma migrate deploy`; `prisma migrate
+      diff --from-config-datasource … --exit-code` shows zero drift; `verify:rls`
+      against a disposable copy of the Supabase DB (`PGURL=… VERIFY_RLS_ALLOW_DESTRUCTIVE=1`)
 - [ ] `/api/health` returns `ok` with expected integrations
 - [ ] responsive check: 375px, 768px, 1280px
 - [ ] no secret in the client bundle (`grep` the `.next` output for known prefixes)

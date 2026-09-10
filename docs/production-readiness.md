@@ -11,7 +11,7 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 
 | Item | Status | Notes |
 |---|---|---|
-| Production config gate (refuse insecure dev defaults) | ✅ | `env.ts` `productionConfigProblems()` — blocks `AUTH_MODE=dev`, default `DEV_AUTH_SECRET`, SQLite, localhost `APP_URL` in prod |
+| Production config gate (refuse insecure dev defaults) | ✅ | `env.ts` `productionConfigProblems()` — blocks `AUTH_MODE=dev`, default `DEV_AUTH_SECRET`, non-postgres `DATABASE_PROVIDER`, localhost `APP_URL` in prod |
 | Every server action calls `requireUser()` / `requireAdmin()` | ✅ | audited; verified in `tests/` |
 | Every user-owned query scoped by authenticated `userId` | ✅ | service layer; `tests/isolation.test.ts` (18 cases) |
 | Relationship-tampering (attach another user's record) blocked | ✅ | deal/invoice/transaction/task/outreach validate every linked id |
@@ -41,7 +41,7 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 |---|---|---|
 | Schema is Postgres-compatible | ✅ | no enums, scalar lists, or `@db.` types |
 | `contains` search behaves identically dev↔prod | ✅ | `lib/db-helpers.textSearch()` adds `mode:insensitive` on Postgres |
-| Migrations | ✅ (Postgres schema verified) / ⚠️ (regenerate on switch) | `prisma/postgres-preview.sql` is CI-checked against `schema.prisma` (no drift) and applies cleanly to real Postgres 18 via `prisma migrate deploy`. Local dev/CI stay on the SQLite migration set; the switch (`rm -rf prisma/migrations && prisma migrate dev --name init`, diff vs preview) is the documented per-deployment step |
+| Migrations | ✅ | Single PostgreSQL init migration (`prisma/migrations/20260910000000_init`), generated from the schema. CI (`postgres` job) fails on any drift from `schema.prisma`, runs `prisma migrate deploy` against a real Postgres, and asserts zero drift on the live DB. `vercel-build` runs `prisma migrate deploy` (never reset/push). |
 | Indexes for hot paths | ✅ | userId(+status/date) on every child table; `AuditLog(action)` + `(createdAt)` added; `WebhookEvent` unique |
 | Unique constraints | ✅ | `User.clerkId/email`, `Subscription.stripe*`, `SavedOpportunity(userId,opportunityId)`, `Invoice(userId,number)`, `UsageCounter(userId,feature,periodKey)`, `WebhookEvent(provider,eventId)` |
 | Foreign keys + cascade rules | ✅ | owned data `Cascade`, optional links `SetNull` (money survives contact deletion) |
@@ -170,8 +170,8 @@ Legend: ✅ Complete · ⚠️ Requires production credentials/configuration · 
 | Data integrity (usage bypass, idempotency, CSV safety, goals) | ✅ | `tests/data-integrity.test.ts` |
 | API / webhook behaviour | ✅ | `tests/api.test.ts` |
 | Input validation / boundary | ✅ | `tests/validation.test.ts` |
-| **106 tests** total, serial (shared test DB) | ✅ | +Clerk webhook (10), +email templates (2) |
-| Postgres-target CI run | ✅ | `ci.yml` `postgres` job: schema-drift check + `verify:rls` (RLS + cross-user isolation vs real Postgres 18 / PGlite). Prisma service-layer isolation suite vs live Supabase is a documented go-live step |
+| **106 tests** total, serial, against in-process PGlite Postgres | ✅ | `tests/stubs/db.ts` (aliased over `@/lib/db`); +Clerk webhook (10), +email templates (2) |
+| Postgres-target CI | ✅ | `verify` job runs the whole suite + build on Postgres; `postgres` job adds schema-drift, `migrate deploy` against real Postgres with a zero-drift assertion, and `verify:rls` |
 | E2E (Playwright) | ❌ | manual browser QA only |
 | Load / soak test | ❌ | |
 
@@ -225,11 +225,12 @@ integration pass. What is left is **provisioning + one-time verification against
 real services** (each STOPs here because it needs a credential this environment does
 not have):
 
-1. **Supabase**: create Preview + Production projects; set `DATABASE_PROVIDER=postgresql`
-   + pooled/direct URLs; `rm -rf prisma/migrations && prisma migrate dev --name init`
-   and diff against `prisma/postgres-preview.sql` (must be identical); `prisma migrate
-   deploy`; `psql -f prisma/rls/policies.sql`; `npm run db:seed`; then run the Prisma
-   service-layer isolation suite against the live DB.
+1. **Supabase**: create Preview + Production projects; set pooled/direct URLs in
+   `.env.local` and Vercel; `npm run db:deploy` (applies the committed init
+   migration — no regeneration needed); `psql -f prisma/rls/policies.sql`;
+   `npm run db:seed`; assert zero drift
+   (`prisma migrate diff --from-config-datasource … --exit-code`) and run
+   `verify:rls` against a disposable copy.
 2. **Clerk**: create the app; set `AUTH_MODE=clerk` + publishable/secret keys;
    add a Dashboard webhook → `/api/webhooks/clerk` (user.created/updated/deleted) and
    copy `CLERK_WEBHOOK_SECRET`.

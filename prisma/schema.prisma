@@ -1,11 +1,13 @@
 // Opportunity Engine — Prisma schema
 // ---------------------------------------------------------------------------
-// PORTABILITY: This schema is written to run on BOTH SQLite (local dev) and
-// PostgreSQL / Supabase (preview + production). To keep it portable we avoid:
+// PORTABILITY: This schema was written to run on BOTH SQLite and PostgreSQL and
+// still avoids anything engine-specific:
 //   - native `enum` types      -> use String columns + Zod unions in src/lib/validations
 //   - scalar list fields (x[]) -> use explicit join tables
 //   - db-native column types   -> none referenced
-// Switch providers with the DATABASE_PROVIDER + DATABASE_URL env vars.
+// Every environment now runs PostgreSQL: local dev + CI use PGlite (embedded
+// Postgres, `npm run pg:up`), preview + production use Supabase. The SQLite dev
+// path was retired on 2026-09-10 (git history <= 3154fe9 still has it).
 //
 // AUTHORIZATION: Row Level Security policies for production live in
 // prisma/rls/*.sql and are applied to Supabase separately. The ENFORCED
@@ -19,9 +21,9 @@ generator client {
 }
 
 // Prisma 7: the connection URL lives in prisma.config.ts, not here.
-// Local dev = sqlite; production swaps provider to "postgresql" (see docs/database.md).
+// PostgreSQL everywhere — PGlite locally, Supabase in preview/production.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ---------------------------------------------------------------------------
