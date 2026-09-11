@@ -166,5 +166,114 @@ describe("POST /api/webhooks/clerk — unconfigured", () => {
     );
     expect(res.status).toBe(501);
     vi.doUnmock("@/lib/env");
+    // With isolate:false the module graph is shared across test files — without
+    // this, modules re-imported above (e.g. @/lib/stripe) would stay cached
+    // bound to this test's doMock'd env and leak into whichever file runs next.
+    vi.resetModules();
+  });
+});
+
+describe("POST /api/webhooks/clerk — user.deleted + Stripe cancellation (separate module state)", () => {
+  async function withStripeEnabled() {
+    vi.resetModules();
+    vi.doMock("@/lib/env", () => ({
+      env: {
+        AUTH_MODE: "clerk",
+        CLERK_WEBHOOK_SECRET: SIGNING_SECRET,
+        CLERK_SECRET_KEY: "sk_test_x",
+        STRIPE_SECRET_KEY: "sk_test_fake",
+        DATABASE_PROVIDER: process.env.DATABASE_PROVIDER ?? "postgresql",
+        DATABASE_URL: process.env.DATABASE_URL,
+        DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
+        DEV_AUTH_SECRET: "test-secret",
+        NODE_ENV: "test",
+      },
+      publicEnv: {},
+      integrations: { clerk: true, stripe: true },
+      productionConfigProblems: () => [],
+    }));
+    const mod = await import("@/app/api/webhooks/clerk/route");
+    const { stripe: freshStripe } = await import("@/lib/stripe");
+    return { POST: mod.POST, stripe: freshStripe };
+  }
+
+  it("cancels the linked Stripe subscription before deleting the local user", async () => {
+    const { POST: postFresh, stripe: freshStripe } = await withStripeEnabled();
+    const cancelSpy = vi.spyOn(freshStripe().subscriptions, "cancel").mockResolvedValue({} as never);
+
+    const u = await db.user.create({
+      data: {
+        clerkId: "user_clerk_stripe",
+        email: "hasplan@example.com",
+        subscription: {
+          create: { stripeCustomerId: "cus_del", stripeSubscriptionId: "sub_del", status: "active", plan: "pro" },
+        },
+      },
+    });
+
+    const res = await postFresh(
+      signedRequest({ type: "user.deleted", object: "event", data: { id: "user_clerk_stripe", deleted: true } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(cancelSpy).toHaveBeenCalledWith("sub_del");
+    expect(await db.user.count({ where: { id: u.id } })).toBe(0);
+    vi.doUnmock("@/lib/env");
+    // With isolate:false the module graph is shared across test files — without
+    // this, modules re-imported above (e.g. @/lib/stripe) would stay cached
+    // bound to this test's doMock'd env and leak into whichever file runs next.
+    vi.resetModules();
+  });
+
+  it("does not call Stripe for a user with no Stripe subscription", async () => {
+    const { POST: postFresh, stripe: freshStripe } = await withStripeEnabled();
+    const cancelSpy = vi.spyOn(freshStripe().subscriptions, "cancel").mockResolvedValue({} as never);
+
+    const u = await db.user.create({
+      data: { clerkId: "user_clerk_nosub", email: "noplan@example.com", subscription: { create: {} } },
+    });
+
+    const res = await postFresh(
+      signedRequest({ type: "user.deleted", object: "event", data: { id: "user_clerk_nosub", deleted: true } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(cancelSpy).not.toHaveBeenCalled();
+    expect(await db.user.count({ where: { id: u.id } })).toBe(0);
+    vi.doUnmock("@/lib/env");
+    // With isolate:false the module graph is shared across test files — without
+    // this, modules re-imported above (e.g. @/lib/stripe) would stay cached
+    // bound to this test's doMock'd env and leak into whichever file runs next.
+    vi.resetModules();
+  });
+
+  it("does not delete the local user if Stripe cancellation fails, and lets Clerk retry", async () => {
+    const { POST: postFresh, stripe: freshStripe } = await withStripeEnabled();
+    vi.spyOn(freshStripe().subscriptions, "cancel").mockRejectedValue(new Error("stripe unavailable"));
+
+    const u = await db.user.create({
+      data: {
+        clerkId: "user_clerk_stripefail",
+        email: "failcancel@example.com",
+        subscription: {
+          create: { stripeCustomerId: "cus_fail", stripeSubscriptionId: "sub_fail", status: "active", plan: "pro" },
+        },
+      },
+    });
+
+    const res = await postFresh(
+      signedRequest({ type: "user.deleted", object: "event", data: { id: "user_clerk_stripefail", deleted: true } }),
+    );
+
+    expect(res.status).toBe(500);
+    // Local user must still exist — we never got past the failed Stripe call.
+    expect(await db.user.count({ where: { id: u.id } })).toBe(1);
+    // Idempotency row was dropped so a Clerk retry will re-attempt the cancellation.
+    expect(await db.webhookEvent.count({ where: { provider: "clerk" } })).toBe(0);
+    vi.doUnmock("@/lib/env");
+    // With isolate:false the module graph is shared across test files — without
+    // this, modules re-imported above (e.g. @/lib/stripe) would stay cached
+    // bound to this test's doMock'd env and leak into whichever file runs next.
+    vi.resetModules();
   });
 });

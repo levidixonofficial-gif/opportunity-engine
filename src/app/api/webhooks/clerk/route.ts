@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import type { WebhookEvent } from "@clerk/nextjs/webhooks";
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
+import { env, integrations } from "@/lib/env";
+import { stripe } from "@/lib/stripe";
 import { captureException } from "@/lib/observability";
 import { writeAudit } from "@/lib/audit";
 
@@ -90,10 +91,24 @@ export async function POST(req: NextRequest) {
       case "user.deleted": {
         // Clerk sends { id, deleted: true }. Remove the mirror; owned rows cascade
         // via schema onDelete. A missing row is fine (already gone / never synced).
-        const existing = await db.user.findUnique({ where: { clerkId: data.id } });
-        if (existing) {
-          await db.user.delete({ where: { id: existing.id } });
+        const existing = await db.user.findUnique({
+          where: { clerkId: data.id },
+          include: { subscription: true },
+        });
+        if (!existing) break;
+
+        // Stop billing BEFORE deleting our only record of the link to Stripe.
+        // The subscription id comes from our own (webhook-written) DB row —
+        // never from this Clerk payload or any client input. If Stripe fails,
+        // let it throw to the outer catch: the idempotency row is dropped and
+        // Clerk retries, so we never delete the local mirror while a paid
+        // subscription might still be active and uncanceled.
+        const sub = existing.subscription;
+        if (integrations.stripe && sub?.stripeSubscriptionId && sub.status !== "canceled") {
+          await stripe().subscriptions.cancel(sub.stripeSubscriptionId);
         }
+
+        await db.user.delete({ where: { id: existing.id } });
         break;
       }
 

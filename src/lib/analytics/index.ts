@@ -24,6 +24,7 @@ export type AnalyticsEvent =
   | "ai_request_made"
   | "generator_run"
   | "subscription_started"
+  | "subscription_activated"
   | "subscription_canceled";
 
 type Props = Record<string, string | number | boolean | null | undefined>;

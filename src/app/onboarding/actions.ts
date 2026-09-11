@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { onboardingSubmissionSchema } from "@/lib/onboarding/questions";
 import { submitOnboarding } from "@/server/services/onboarding";
+import { track } from "@/lib/analytics";
 
 export interface OnboardingActionState {
   error?: string;
@@ -29,5 +30,6 @@ export async function submitOnboardingAction(
   }
 
   await submitOnboarding(user.id, parsed.data);
+  await track(user.id, "onboarding_completed", { primaryGoal: parsed.data.primaryGoal });
   redirect("/dashboard");
 }

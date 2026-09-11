@@ -7,8 +7,31 @@ import { captureException } from "@/lib/observability";
 import { writeAudit } from "@/lib/audit";
 import { createNotification } from "@/server/services/notifications";
 import { sendEmail, paymentFailedEmail } from "@/lib/email";
+import { track } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Write a verified Stripe Subscription object onto our mirror row, keyed by
+ * Stripe customer id. Shared by customer.subscription.created/updated and
+ * invoice.payment_succeeded so both stay in sync the same way.
+ */
+async function syncSubscriptionRow(sub: Stripe.Subscription) {
+  const priceId = sub.items.data[0]?.price?.id ?? null;
+  return db.subscription.updateMany({
+    where: { stripeCustomerId: sub.customer as string },
+    data: {
+      stripeSubscriptionId: sub.id,
+      stripePriceId: priceId,
+      plan: planForPrice(priceId),
+      status: normalizeStatus(sub.status),
+      currentPeriodEnd: sub.items.data[0]?.current_period_end
+        ? new Date(sub.items.data[0].current_period_end * 1000)
+        : null,
+      cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    },
+  });
+}
 
 /**
  * Stripe webhook. Verifies the signature against STRIPE_WEBHOOK_SECRET, then
@@ -53,27 +76,40 @@ export async function POST(req: Request) {
         const userId = (session.metadata?.userId ?? session.client_reference_id) as string | undefined;
         if (userId) {
           await db.subscription.updateMany({ where: { userId }, data: { stripeCustomerId: customerId } });
+          // The one-time "purchase completed" signal — fires once per checkout,
+          // unlike invoice.payment_succeeded which also fires on every renewal.
+          await track(userId, "subscription_activated", { plan: session.metadata?.plan ?? null });
         }
         break;
       }
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const sub = event.data.object;
-        const priceId = sub.items.data[0]?.price?.id ?? null;
-        await db.subscription.updateMany({
-          where: { stripeCustomerId: sub.customer as string },
-          data: {
-            stripeSubscriptionId: sub.id,
-            stripePriceId: priceId,
-            plan: planForPrice(priceId),
-            status: normalizeStatus(sub.status),
-            currentPeriodEnd: sub.items.data[0]?.current_period_end
-              ? new Date(sub.items.data[0].current_period_end * 1000)
-              : null,
-            cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-          },
+        await syncSubscriptionRow(event.data.object);
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        const subscriptionRef = invoice.parent?.subscription_details?.subscription;
+        const subscriptionId = typeof subscriptionRef === "string" ? subscriptionRef : subscriptionRef?.id;
+        // Not a subscription invoice (e.g. a one-off item) — nothing to sync.
+        if (!subscriptionId) break;
+
+        // Only re-sync a row that already exists for this Stripe customer. A
+        // payment event alone must never create or activate a subscription
+        // record for an account that doesn't already have one.
+        const existing = await db.subscription.findFirst({
+          where: { stripeCustomerId: invoice.customer as string },
+          select: { id: true },
         });
+        if (!existing) break;
+
+        // Re-derive status/plan from the authoritative Subscription object
+        // rather than assuming "active" from payment success alone — it could
+        // still be trialing, or (in a delivery race) already canceled.
+        const sub = await stripe().subscriptions.retrieve(subscriptionId);
+        await syncSubscriptionRow(sub);
         break;
       }
 
