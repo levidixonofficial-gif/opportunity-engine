@@ -18,7 +18,7 @@ import { env } from "@/lib/env";
 function createPrisma(): PrismaClient {
   const adapter =
     env.DATABASE_PROVIDER === "postgresql"
-      ? new PrismaPg({ connectionString: env.DIRECT_DATABASE_URL ?? env.DATABASE_URL, max: 1 })
+      ? new PrismaPg({ connectionString: env.DATABASE_URL ?? env.DIRECT_DATABASE_URL, max: 1 })
       : new PrismaBetterSqlite3({ url: env.DATABASE_URL });
 
   return new PrismaClient({
