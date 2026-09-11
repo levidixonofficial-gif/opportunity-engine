@@ -38,7 +38,7 @@ export default async function SignInPage() {
         <CardContent>
           {clerkMode ? (
             ClerkSignIn ? (
-              <ClerkSignIn routing="hash" />
+              <ClerkSignIn routing="hash" fallbackRedirectUrl="/dashboard" />
             ) : (
               <p className="text-sm text-muted">
                 Set <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> to load the Clerk sign-in form.
